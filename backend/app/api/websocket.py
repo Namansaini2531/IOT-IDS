@@ -30,29 +30,37 @@ manager = ConnectionManager()
 async def websocket_traffic_stream(websocket: WebSocket):
     await manager.connect(websocket)
     try:
-        # Default stream speed: 1 flow per 0.8s
         delay = 0.8
+        is_paused = False
         while True:
-            # Check if any client message was sent to adjust speed
+            # Check if any client message was sent to adjust speed or pause/resume
             try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=0.01)
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=0.02)
                 cmd = json.loads(data)
                 if "speed" in cmd:
                     delay = max(0.1, float(cmd["speed"]))
+                if "action" in cmd:
+                    if cmd["action"] == "pause":
+                        is_paused = True
+                    elif cmd["action"] == "resume":
+                        is_paused = False
+                    elif cmd["action"] == "toggle":
+                        is_paused = not is_paused
             except asyncio.TimeoutError:
                 pass
             except Exception:
                 pass
 
-            flow_event = traffic_simulator.get_next_flow()
-            if flow_event:
-                await websocket.send_json({
-                    "type": "FLOW_EVENT",
-                    "data": flow_event
-                })
+            if not is_paused:
+                flow_event = traffic_simulator.get_next_flow()
+                if flow_event:
+                    await websocket.send_json({
+                        "type": "FLOW_EVENT",
+                        "data": flow_event
+                    })
 
-            await asyncio.sleep(delay)
+            await asyncio.sleep(delay if not is_paused else 0.15)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-    except Exception as e:
+    except Exception:
         manager.disconnect(websocket)

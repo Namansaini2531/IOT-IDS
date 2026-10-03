@@ -89,7 +89,12 @@ export default function App() {
   const [simResult, setSimResult] = useState(null);
   const [simLoading, setSimLoading] = useState(false);
 
+  const isStreamingRef = useRef(true);
   const wsRef = useRef(null);
+
+  useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
 
   // 1. Fetch System Status & Evaluation Report
   useEffect(() => {
@@ -104,7 +109,7 @@ export default function App() {
       .catch(err => console.error("Eval report error:", err));
   }, []);
 
-  // 2. WebSocket Connection
+  // 2. WebSocket Connection (Permanent, controlled via messages)
   useEffect(() => {
     let ws = null;
     let reconnectTimeout = null;
@@ -119,7 +124,7 @@ export default function App() {
       };
 
       ws.onmessage = (event) => {
-        if (!isStreaming) return;
+        if (!isStreamingRef.current) return;
         try {
           const message = JSON.parse(event.data);
           if (message.type === "FLOW_EVENT") {
@@ -148,7 +153,17 @@ export default function App() {
       if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [isStreaming]);
+  }, []);
+
+  // Toggle Stream Pause/Resume
+  const handleToggleStreaming = () => {
+    const nextState = !isStreaming;
+    setIsStreaming(nextState);
+    isStreamingRef.current = nextState;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: nextState ? "resume" : "pause" }));
+    }
+  };
 
   // Update stream speed to backend
   const handleSpeedChange = (speed) => {
@@ -312,14 +327,14 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => setIsStreaming(!isStreaming)}
+            onClick={handleToggleStreaming}
             style={{
-              display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)', cursor: 'pointer',
               background: isStreaming ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-              color: isStreaming ? '#f87171' : '#34d399', fontWeight: 600, fontSize: '0.8rem'
+              color: isStreaming ? '#f87171' : '#34d399', fontWeight: 700, fontSize: '0.85rem', transition: 'all 0.2s'
             }}
           >
-            {isStreaming ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Replay</>}
+            {isStreaming ? <><Pause size={15} /> Pause Stream</> : <><Play size={15} /> Resume Stream</>}
           </button>
         </div>
       </header>

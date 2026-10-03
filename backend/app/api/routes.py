@@ -174,32 +174,93 @@ async def upload_and_analyze_dataset(
         anomaly_count = 0
         attack_distribution = {}
         high_risk_devices = set()
+        device_summary = {}
 
         for idx, row in mapped_df.iterrows():
             row_dict = row.to_dict()
             dev_id = str(row_dict.get("device_id", f"node-{(idx % 6) + 1}"))
             pred = pipeline_instance.predict_flow(row_dict, device_id=dev_id)
             
-            if pred["is_anomaly"]:
+            is_anom = pred["is_anomaly"]
+            severity = pred["risk_assessment"]["severity"]
+            risk_val = pred["risk_assessment"]["risk_score"]
+            cls = pred["classification"]
+            top_dev = pred["top_deviating_features"][0] if pred["top_deviating_features"] else None
+
+            if is_anom:
                 anomaly_count += 1
-                if pred["risk_assessment"]["severity"] in ["CRITICAL", "HIGH"]:
+                if severity in ["CRITICAL", "HIGH"]:
                     high_risk_devices.add(dev_id)
 
-            cls = pred["classification"]
             attack_distribution[cls] = attack_distribution.get(cls, 0) + 1
+
+            # Aggregate Device Rollup
+            if dev_id not in device_summary:
+                device_summary[dev_id] = {
+                    "device_id": dev_id,
+                    "total_flows": 0,
+                    "anomaly_flows": 0,
+                    "max_risk_score": 0.0,
+                    "risk_scores": [],
+                    "attacks_seen": {},
+                    "severities": {},
+                    "top_deviating_signals": []
+                }
+            
+            dev_rec = device_summary[dev_id]
+            dev_rec["total_flows"] += 1
+            if is_anom:
+                dev_rec["anomaly_flows"] += 1
+            dev_rec["risk_scores"].append(risk_val)
+            dev_rec["max_risk_score"] = max(dev_rec["max_risk_score"], risk_val)
+            dev_rec["attacks_seen"][cls] = dev_rec["attacks_seen"].get(cls, 0) + 1
+            dev_rec["severities"][severity] = dev_rec["severities"].get(severity, 0) + 1
+            if top_dev and len(dev_rec["top_deviating_signals"]) < 3:
+                label_val = f"{top_dev['label']} ({round(top_dev['observed_value'], 2)})"
+                if label_val not in dev_rec["top_deviating_signals"]:
+                    dev_rec["top_deviating_signals"].append(label_val)
 
             results.append({
                 "row_index": idx + 1,
                 "device_id": dev_id,
-                "is_anomaly": pred["is_anomaly"],
-                "classification": pred["classification"],
+                "is_anomaly": is_anom,
+                "classification": cls,
                 "reconstruction_error": pred["reconstruction_error"],
                 "anomaly_score": pred["anomaly_score"],
                 "attack_confidence": pred["attack_confidence"],
-                "risk_score": pred["risk_assessment"]["risk_score"],
-                "severity": pred["risk_assessment"]["severity"],
-                "top_deviation": pred["top_deviating_features"][0] if pred["top_deviating_features"] else None
+                "risk_score": risk_val,
+                "severity": severity,
+                "top_deviation": top_dev
             })
+
+        # Format device summaries
+        formatted_devices = []
+        for dev_id, d in device_summary.items():
+            avg_risk = sum(d["risk_scores"]) / len(d["risk_scores"]) if d["risk_scores"] else 0.0
+            primary_attack = max(d["attacks_seen"].items(), key=lambda x: x[1])[0] if d["attacks_seen"] else "Benign"
+            
+            if d["max_risk_score"] >= 0.7 or "CRITICAL" in d["severities"]:
+                overall_health = "CRITICAL"
+            elif d["max_risk_score"] >= 0.4 or "HIGH" in d["severities"]:
+                overall_health = "HIGH_RISK"
+            elif d["anomaly_flows"] > 0 or "MEDIUM" in d["severities"]:
+                overall_health = "SUSPICIOUS"
+            else:
+                overall_health = "BENIGN_HEALTHY"
+
+            formatted_devices.append({
+                "device_id": dev_id,
+                "total_flows": d["total_flows"],
+                "anomaly_flows": d["anomaly_flows"],
+                "anomaly_rate": round((d["anomaly_flows"] / d["total_flows"]) * 100, 1) if d["total_flows"] > 0 else 0,
+                "max_risk_score": round(d["max_risk_score"] * 100, 1),
+                "avg_risk_score": round(avg_risk * 100, 1),
+                "primary_attack": primary_attack,
+                "overall_health": overall_health,
+                "top_signals": d["top_deviating_signals"]
+            })
+
+        formatted_devices.sort(key=lambda x: x["max_risk_score"], reverse=True)
 
         return {
             "filename": file.filename,
@@ -209,6 +270,8 @@ async def upload_and_analyze_dataset(
             "anomaly_rate_percentage": round((anomaly_count / len(results)) * 100, 2),
             "attack_family_breakdown": attack_distribution,
             "high_risk_devices_affected": list(high_risk_devices),
+            "total_devices_scanned": len(formatted_devices),
+            "device_summaries": formatted_devices,
             "reconstruction_threshold_used": pipeline_instance.threshold,
             "rows": results
         }

@@ -18,7 +18,14 @@ import {
   Terminal,
   Layers,
   BarChart3,
-  Network
+  Network,
+  UploadCloud,
+  FileSpreadsheet,
+  Search,
+  FileText,
+  CheckCircle,
+  ArrowRight,
+  Download
 } from 'lucide-react';
 import {
   LineChart,
@@ -49,7 +56,7 @@ const ATTACK_COLORS = {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('monitor'); // 'monitor' | 'evaluation' | 'simulator'
+  const [activeTab, setActiveTab] = useState('analyzer'); // 'analyzer' | 'monitor' | 'evaluation' | 'simulator'
   const [wsConnected, setWsConnected] = useState(false);
   const [isStreaming, setIsStreaming] = useState(true);
   const [streamSpeed, setStreamSpeed] = useState(0.8);
@@ -89,8 +96,18 @@ export default function App() {
   const [simResult, setSimResult] = useState(null);
   const [simLoading, setSimLoading] = useState(false);
 
+  // File Upload & Dataset Analyzer State
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [maxAnalyzeRows, setMaxAnalyzeRows] = useState(500);
+  const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
+  const [fileAnalysisResult, setFileAnalysisResult] = useState(null);
+  const [analysisFilter, setAnalysisFilter] = useState('ALL'); // 'ALL' | 'ANOMALY_ONLY' | 'CRITICAL'
+  const [analysisSearch, setAnalysisSearch] = useState('');
+  const [uploadToast, setUploadToast] = useState('');
+
   const isStreamingRef = useRef(true);
   const wsRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     isStreamingRef.current = isStreaming;
@@ -170,6 +187,64 @@ export default function App() {
     setStreamSpeed(speed);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ speed: speed }));
+    }
+  };
+
+  // Upload File & Analyze with 2-Stage AI Model
+  const handleUploadAndAnalyze = async () => {
+    if (!selectedFile) return;
+    setIsAnalyzingFile(true);
+    setUploadToast('');
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("max_rows", maxAnalyzeRows);
+
+      const res = await fetch(`${API_BASE}/upload-and-analyze`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to analyze file");
+      }
+
+      const data = await res.json();
+      setFileAnalysisResult(data);
+      setUploadToast(`Analyzed ${data.total_records_analyzed} flows! Found ${data.anomalies_detected} anomalies (${data.anomaly_rate_percentage}%).`);
+    } catch (err) {
+      console.error(err);
+      setUploadToast(`Error: ${err.message}`);
+    } finally {
+      setIsAnalyzingFile(false);
+    }
+  };
+
+  // Load Uploaded Dataset into Live Replay Stream
+  const handleLoadCustomStream = async () => {
+    if (!selectedFile) return;
+    setIsAnalyzingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const res = await fetch(`${API_BASE}/load-custom-stream`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) throw new Error("Failed to load stream");
+      const data = await res.json();
+      setUploadToast(`Dataset loaded into live stream! (${data.total_flows} flows)`);
+      setActiveTab('monitor');
+      setIsStreaming(true);
+      isStreamingRef.current = true;
+    } catch (err) {
+      console.error(err);
+      setUploadToast(`Error: ${err.message}`);
+    } finally {
+      setIsAnalyzingFile(false);
     }
   };
 
@@ -316,6 +391,16 @@ export default function App() {
             }}
           >
             <Sliders size={16} /> Flow Injection Lab
+          </button>
+          <button
+            onClick={() => setActiveTab('analyzer')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s',
+              background: activeTab === 'analyzer' ? 'linear-gradient(135deg, #0284c7, #2563eb)' : 'transparent',
+              color: activeTab === 'analyzer' ? '#ffffff' : 'var(--text-secondary)'
+            }}
+          >
+            <UploadCloud size={16} /> Dataset & Log Analyzer
           </button>
         </div>
 
@@ -762,6 +847,293 @@ export default function App() {
               </div>
             )}
           </div>
+
+        </div>
+      )}
+
+      {/* 6. Windhawk & Custom Dataset Analyzer Tab */}
+      {activeTab === 'analyzer' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Top Upload Banner */}
+          <div className="glass-panel" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
+                  <UploadCloud size={24} color="#00f2fe" />
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Windhawk & Arbitrary Dataset Anomaly Analyzer</h2>
+                </div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Upload any Windhawk log, Wireshark/PCAP flow export, or custom CSV/JSON dataset to scan and classify anomalies using the trained 2-Stage model.
+                </p>
+              </div>
+
+              {uploadToast && (
+                <div style={{ padding: '0.6rem 1rem', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Info size={16} /> {uploadToast}
+                </div>
+              )}
+            </div>
+
+            {/* Drag and Drop Zone */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files?.[0]) setSelectedFile(e.dataTransfer.files[0]);
+              }}
+              style={{
+                border: '2px dashed rgba(56, 189, 248, 0.3)',
+                borderRadius: '12px',
+                padding: '2.5rem 1.5rem',
+                textAlign: 'center',
+                background: selectedFile ? 'rgba(56, 189, 248, 0.05)' : 'rgba(15, 23, 42, 0.4)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.75rem'
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.json,.txt"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files?.[0]) setSelectedFile(e.target.files[0]);
+                }}
+              />
+              
+              <div style={{ background: 'rgba(56, 189, 248, 0.15)', padding: '0.85rem', borderRadius: '50%', color: '#38bdf8' }}>
+                <FileSpreadsheet size={32} />
+              </div>
+
+              {selectedFile ? (
+                <div>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+                    {selectedFile.name}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                    {(selectedFile.size / 1024).toFixed(1)} KB — Ready for Anomaly Audit
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+                    Click or drag & drop Windhawk / CSV / JSON dataset here
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                    Supports custom column headers, Wireshark flow stats, Zeek logs & CICIoT datasets
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Controls Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Scan Limit:</label>
+                <select
+                  value={maxAnalyzeRows}
+                  onChange={(e) => setMaxAnalyzeRows(parseInt(e.target.value))}
+                  style={{ padding: '0.45rem 0.85rem', background: '#0f172a', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '6px', fontSize: '0.85rem' }}
+                >
+                  <option value={100}>First 100 Flows</option>
+                  <option value={500}>First 500 Flows (Recommended)</option>
+                  <option value={1000}>First 1,000 Flows</option>
+                  <option value={5000}>First 5,000 Flows</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  onClick={handleUploadAndAnalyze}
+                  disabled={!selectedFile || isAnalyzingFile}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none',
+                    background: selectedFile ? 'linear-gradient(135deg, #0284c7, #2563eb)' : 'rgba(255, 255, 255, 0.1)',
+                    color: selectedFile ? '#fff' : 'var(--text-muted)',
+                    fontWeight: 700, fontSize: '0.85rem', cursor: selectedFile ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  {isAnalyzingFile ? <RefreshCw className="pulse-active" size={16} /> : <Search size={16} />}
+                  Run Anomaly Audit
+                </button>
+
+                <button
+                  onClick={handleLoadCustomStream}
+                  disabled={!selectedFile || isAnalyzingFile}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)',
+                    background: selectedFile ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                    color: selectedFile ? '#34d399' : 'var(--text-muted)',
+                    fontWeight: 700, fontSize: '0.85rem', cursor: selectedFile ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <Play size={16} /> Stream to Live Monitor
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Analysis Audit Output */}
+          {fileAnalysisResult && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              
+              {/* Summary KPIs */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+                <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Total Flows Scanned</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f8fafc' }}>
+                    {fileAnalysisResult.total_records_analyzed.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    File contains {fileAnalysisResult.total_file_records.toLocaleString()} total rows
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Anomalies Flagged</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: fileAnalysisResult.anomalies_detected > 0 ? '#f43f5e' : '#10b981' }}>
+                    {fileAnalysisResult.anomalies_detected.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Anomaly Rate: <strong>{fileAnalysisResult.anomaly_rate_percentage}%</strong>
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Reconstruction Threshold</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#38bdf8' }}>
+                    {fileAnalysisResult.reconstruction_threshold_used.toFixed(5)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Calibrated on benign IoT baseline
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>High-Risk Targets</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: fileAnalysisResult.high_risk_devices_affected.length > 0 ? '#f59e0b' : '#10b981' }}>
+                    {fileAnalysisResult.high_risk_devices_affected.length} Nodes
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Assigned CRITICAL / HIGH severity
+                  </div>
+                </div>
+              </div>
+
+              {/* Detected Attack Distribution Pills */}
+              <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.75rem' }}>Attack Breakdown in Uploaded Data:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  {Object.entries(fileAnalysisResult.attack_family_breakdown).map(([atkName, count]) => (
+                    <div
+                      key={atkName}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '8px',
+                        background: 'rgba(15, 23, 42, 0.6)',
+                        border: `1px solid ${ATTACK_COLORS[atkName] || '#38bdf8'}40`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ATTACK_COLORS[atkName] || '#fff' }}></span>
+                      <span style={{ fontWeight: 600, color: ATTACK_COLORS[atkName] || '#fff' }}>{atkName}:</span>
+                      <strong style={{ color: '#fff' }}>{count} flows</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Interactive Scanned Rows Table */}
+              <div className="glass-panel" style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Scanned Flow Records & Diagnostics</h3>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="Search device, attack..."
+                      value={analysisSearch}
+                      onChange={(e) => setAnalysisSearch(e.target.value)}
+                      style={{ padding: '0.4rem 0.75rem', background: '#0f172a', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '6px', fontSize: '0.8rem', minWidth: '180px' }}
+                    />
+
+                    <select
+                      value={analysisFilter}
+                      onChange={(e) => setAnalysisFilter(e.target.value)}
+                      style={{ padding: '0.4rem 0.75rem', background: '#0f172a', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '6px', fontSize: '0.8rem' }}
+                    >
+                      <option value="ALL">All Flows</option>
+                      <option value="ANOMALY_ONLY">Anomalies Only</option>
+                      <option value="CRITICAL">Critical / High Severity</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto', maxHeight: '520px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', textAlign: 'left', color: 'var(--text-secondary)' }}>
+                        <th style={{ padding: '0.65rem' }}>#</th>
+                        <th style={{ padding: '0.65rem' }}>Target Device / IP</th>
+                        <th style={{ padding: '0.65rem' }}>Stage 1 Verdict</th>
+                        <th style={{ padding: '0.65rem' }}>Stage 2 Attribution</th>
+                        <th style={{ padding: '0.65rem' }}>Recon MSE</th>
+                        <th style={{ padding: '0.65rem' }}>Risk Score</th>
+                        <th style={{ padding: '0.65rem' }}>Top Deviating Signal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fileAnalysisResult.rows
+                        .filter(r => {
+                          if (analysisFilter === 'ANOMALY_ONLY' && !r.is_anomaly) return false;
+                          if (analysisFilter === 'CRITICAL' && !['CRITICAL', 'HIGH'].includes(r.severity)) return false;
+                          if (analysisSearch) {
+                            const query = analysisSearch.toLowerCase();
+                            return r.device_id.toLowerCase().includes(query) || r.classification.toLowerCase().includes(query);
+                          }
+                          return true;
+                        })
+                        .map((row) => (
+                          <tr key={row.row_index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: row.is_anomaly ? 'rgba(239, 68, 68, 0.04)' : 'transparent' }}>
+                            <td style={{ padding: '0.65rem', color: 'var(--text-muted)' }}>{row.row_index}</td>
+                            <td style={{ padding: '0.65rem', fontWeight: 600 }}>{row.device_id}</td>
+                            <td style={{ padding: '0.65rem' }}>
+                              <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: row.is_anomaly ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: row.is_anomaly ? '#f87171' : '#34d399' }}>
+                                {row.is_anomaly ? "ANOMALY" : "NORMAL"}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.65rem', fontWeight: 700, color: ATTACK_COLORS[row.classification] || '#fff' }}>
+                              {row.classification}
+                            </td>
+                            <td style={{ padding: '0.65rem', fontFamily: 'var(--font-mono)' }}>
+                              {row.reconstruction_error.toFixed(5)}
+                            </td>
+                            <td style={{ padding: '0.65rem' }}>
+                              <span className={`badge-${row.severity.toLowerCase()}`} style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>
+                                {(row.risk_score * 100).toFixed(0)}% [{row.severity}]
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.65rem', color: 'var(--text-secondary)' }}>
+                              {row.top_deviation ? `${row.top_deviation.label} (${row.top_deviation.observed_value})` : 'Baseline'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
 
         </div>
       )}

@@ -124,14 +124,15 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     return mapped_df
 
-def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 25000) -> tuple[pd.DataFrame, int, str]:
+def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: Optional[int] = None) -> tuple[pd.DataFrame, int, str]:
     """
     Universally parses uploaded binary PCAP, CSV, TSV, JSON, JSONL, Zeek logs,
     or compressed gzip logs into a normalized DataFrame ready for 2-Stage inference.
-    Uses memory-efficient parsing to stay safely within free-tier container limits.
+    Parses the full file when max_rows is None or 0.
     Returns: (mapped_df, total_file_records, file_type_desc)
     """
     fn_lower = filename.lower()
+    read_nrows = max_rows if (max_rows is not None and max_rows > 0) else None
 
     # 1. Native Wireshark / Tcpdump PCAP / PCAPNG
     if fn_lower.endswith((".pcap", ".pcapng", ".cap")) or contents[:4] in [b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x0a\x0d\x0d\x0a"]:
@@ -143,21 +144,21 @@ def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 25
     if fn_lower.endswith(".gz") or contents[:2] == b"\x1f\x8b":
         decompressed = gzip.decompress(contents)
         try:
-            df = pd.read_csv(io.BytesIO(decompressed), nrows=max_rows, low_memory=False)
+            df = pd.read_csv(io.BytesIO(decompressed), nrows=read_nrows, low_memory=False)
             mapped_df = map_arbitrary_dataframe(df)
             return mapped_df, len(df), "GZIP Compressed CSV Archive"
         except Exception:
-            df = pd.read_json(io.BytesIO(decompressed), nrows=max_rows)
+            df = pd.read_json(io.BytesIO(decompressed), nrows=read_nrows)
             mapped_df = map_arbitrary_dataframe(df)
             return mapped_df, len(df), "GZIP Compressed JSON Archive"
 
     # 3. JSON / JSON-Lines
     if fn_lower.endswith((".json", ".jsonl")):
         try:
-            df = pd.read_json(io.BytesIO(contents), nrows=max_rows)
+            df = pd.read_json(io.BytesIO(contents), nrows=read_nrows)
         except Exception:
             try:
-                df = pd.read_json(io.BytesIO(contents), lines=True, nrows=max_rows)
+                df = pd.read_json(io.BytesIO(contents), lines=True, nrows=read_nrows)
             except Exception:
                 raw_json = json.loads(contents.decode("utf-8", errors="replace"))
                 if isinstance(raw_json, dict):
@@ -165,8 +166,8 @@ def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 25
                         if key in raw_json and isinstance(raw_json[key], list):
                             raw_json = raw_json[key]
                             break
-                if isinstance(raw_json, list) and len(raw_json) > max_rows:
-                    raw_json = raw_json[:max_rows]
+                if isinstance(raw_json, list) and read_nrows and len(raw_json) > read_nrows:
+                    raw_json = raw_json[:read_nrows]
                 df = pd.DataFrame(raw_json)
         mapped_df = map_arbitrary_dataframe(df)
         return mapped_df, len(df), "JSON / JSON-Lines Dataset"
@@ -179,7 +180,9 @@ def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 25
             header_line = next((l for l in lines if l.startswith("#fields")), None)
             if header_line:
                 fields = header_line.replace("#fields", "").strip().split()
-                data_lines = [l.split("\t") if "\t" in l else l.split() for l in lines if not l.startswith("#")][:max_rows]
+                data_lines = [l.split("\t") if "\t" in l else l.split() for l in lines if not l.startswith("#")]
+                if read_nrows:
+                    data_lines = data_lines[:read_nrows]
                 df = pd.DataFrame(data_lines, columns=fields[:len(data_lines[0])] if data_lines else None)
                 mapped_df = map_arbitrary_dataframe(df)
                 return mapped_df, len(df), "Zeek Network Security Log"
@@ -189,14 +192,14 @@ def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 25
     # 5. Fast Standard C CSV Reader with fallback
     for encoding in ["utf-8", "latin1", "cp1252"]:
         try:
-            df = pd.read_csv(io.BytesIO(contents), nrows=max_rows, low_memory=False, encoding=encoding)
+            df = pd.read_csv(io.BytesIO(contents), nrows=read_nrows, low_memory=False, encoding=encoding)
             mapped_df = map_arbitrary_dataframe(df)
             return mapped_df, len(df), f"CSV/Delimited Dataset ({len(df.columns)} cols)"
         except Exception:
             continue
 
     # Fallback default reader
-    df = pd.read_csv(io.BytesIO(contents), nrows=max_rows, encoding="latin1", low_memory=False)
+    df = pd.read_csv(io.BytesIO(contents), nrows=read_nrows, encoding="latin1", low_memory=False)
     mapped_df = map_arbitrary_dataframe(df)
     return mapped_df, len(df), "CSV Dataset"
 
@@ -251,7 +254,7 @@ def predict_single_flow(request: FlowInferenceRequest):
 @router.post("/upload-and-analyze")
 async def upload_and_analyze_dataset(
     file: UploadFile = File(...),
-    max_rows: int = Form(500),
+    max_rows: int = Form(0),
     page: int = Form(1),
     page_size: int = Form(100)
 ):
@@ -260,7 +263,7 @@ async def upload_and_analyze_dataset(
     Processes Wireshark captures (.pcap, .pcapng), CSV datasets, JSON logs, or Zeek telemetry
     through the 2-Stage ML Pipeline (Autoencoder Anomaly Gate + Supervised Attack Classifier)
     with feature explainability, fleet risk quantification, and server-side pagination support.
-    Memory-optimized for cloud deployment.
+    Analyzes the entire uploaded file automatically.
     """
     import gc
     import math
@@ -269,8 +272,8 @@ async def upload_and_analyze_dataset(
         pipeline_instance.load_artifacts()
 
     try:
-        # Support up to 20k/25k flows safely
-        safe_max_rows = min(max(10, int(max_rows)), 25000)
+        # If max_rows is 0 or negative, analyze entire dataset without row limit
+        safe_max_rows = int(max_rows) if int(max_rows) > 0 else None
 
         contents = await file.read()
         if not contents or len(contents) == 0:
@@ -287,7 +290,7 @@ async def upload_and_analyze_dataset(
         if len(mapped_df) == 0:
             raise HTTPException(status_code=400, detail="Uploaded file produced 0 valid network flow records.")
 
-        if len(mapped_df) > safe_max_rows:
+        if safe_max_rows and len(mapped_df) > safe_max_rows:
             mapped_df = mapped_df.iloc[:safe_max_rows]
 
         # Extract features matrix and scale

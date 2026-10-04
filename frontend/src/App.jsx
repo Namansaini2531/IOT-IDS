@@ -87,7 +87,6 @@ export default function App() {
 
   // File Upload & Dataset Analyzer State
   const [selectedFile, setSelectedFile] = useState(null);
-  const [maxAnalyzeRows, setMaxAnalyzeRows] = useState(500);
   const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
   const [fileAnalysisResult, setFileAnalysisResult] = useState(null);
   const [analysisFilter, setAnalysisFilter] = useState('ALL'); // 'ALL' | 'ANOMALY_ONLY' | 'CRITICAL'
@@ -162,7 +161,7 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("max_rows", maxAnalyzeRows);
+      formData.append("max_rows", "0");
 
       const res = await fetch(`${apiBase}/upload-and-analyze`, {
         method: "POST",
@@ -370,19 +369,9 @@ export default function App() {
 
               {/* Ingestion Controls */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Analyze Max Rows:</span>
-                  <select
-                    value={maxAnalyzeRows}
-                    onChange={(e) => setMaxAnalyzeRows(Number(e.target.value))}
-                    style={{ padding: '0.45rem 0.75rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.82rem' }}
-                  >
-                    <option value={100}>100 Flows</option>
-                    <option value={500}>500 Flows</option>
-                    <option value={1000}>1,000 Flows</option>
-                    <option value={5000}>5,000 Flows</option>
-                    <option value={20000}>All Flows (Up to 20k)</option>
-                  </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <Layers size={14} color="#38bdf8" />
+                  <span>Mode: <strong>Full Dataset Deep Scan</strong></span>
                 </div>
 
                 <button

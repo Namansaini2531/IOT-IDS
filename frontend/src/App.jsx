@@ -41,6 +41,9 @@ import {
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
+  ReferenceLine,
   XAxis,
   YAxis,
   Tooltip,
@@ -533,27 +536,73 @@ export default function App() {
                 {/* 3. Visualizations */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
                   
-                  {/* Autoencoder Reconstruction Chart */}
+                  {/* Anomaly & Threat Timeline Chart */}
                   <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc' }}>
-                        Autoencoder Reconstruction MSE (vs 98th Percentile Baseline)
-                      </h4>
-                      <span style={{ fontSize: '0.72rem', color: '#38bdf8' }}>
-                        Threshold: {fileAnalysisResult.reconstruction_threshold_used.toFixed(4)}
-                      </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                          <Activity size={16} color="#38bdf8" />
+                          IoT Fleet Anomaly & Threat Timeline
+                        </h4>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                          Sequential flow anomaly score (0-100%) vs baseline decision boundary
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: '#fb7185' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f43f5e' }}></span> Anomaly Spike
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: '#34d399' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span> Normal Baseline
+                        </span>
+                      </div>
                     </div>
                     <div style={{ height: '220px', width: '100%' }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={fileAnalysisResult.rows.slice(0, 50)}>
-                          <XAxis dataKey="row_index" stroke="rgba(255,255,255,0.2)" fontSize={11} tickLine={false} />
-                          <YAxis stroke="rgba(255,255,255,0.2)" fontSize={11} tickLine={false} />
+                        <AreaChart
+                          data={fileAnalysisResult.rows.slice(0, 100).map(r => ({
+                            index: r.row_index,
+                            anomalyScorePct: Math.min(100, Math.round((r.anomaly_score || 0) * 100)),
+                            riskScorePct: Math.round((r.risk_score || 0) * 100),
+                            isAnomaly: r.is_anomaly,
+                            threat: r.classification,
+                            deviceId: r.device_id,
+                            severity: r.severity,
+                            topDev: r.top_deviation ? `${r.top_deviation.label} (${r.top_deviation.observed_value})` : 'Normal Baseline'
+                          }))}
+                        >
+                          <defs>
+                            <linearGradient id="anomalyGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.7} />
+                              <stop offset="60%" stopColor="#38bdf8" stopOpacity={0.25} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="index" stroke="rgba(255,255,255,0.2)" fontSize={11} tickLine={false} label={{ value: 'Network Flow #', position: 'insideBottom', offset: -2, fill: 'rgba(255,255,255,0.3)', fontSize: 10 }} />
+                          <YAxis domain={[0, 100]} stroke="rgba(255,255,255,0.2)" fontSize={11} tickLine={false} unit="%" />
+                          <ReferenceLine y={40} stroke="rgba(244, 63, 94, 0.45)" strokeDasharray="3 3" label={{ value: 'Alert Line (40%)', fill: '#fb7185', fontSize: 10, position: 'right' }} />
                           <Tooltip
-                            contentStyle={{ background: '#09090c', borderColor: '#22222a', borderRadius: '8px', fontSize: '0.75rem', boxShadow: '0 8px 24px rgba(0,0,0,0.9)' }}
-                            formatter={(value, name) => [value, name === 'reconstruction_error' ? 'Recon MSE' : name]}
+                            content={({ active, payload }) => {
+                              if (!active || !payload || !payload.length) return null;
+                              const d = payload[0].payload;
+                              return (
+                                <div style={{ background: '#09090d', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.74rem', boxShadow: '0 8px 24px rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.3rem' }}>
+                                    <span style={{ fontWeight: 700, color: '#f8fafc' }}>Flow #{d.index}</span>
+                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, background: d.isAnomaly ? 'rgba(244, 63, 94, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: d.isAnomaly ? '#fb7185' : '#34d399' }}>
+                                      {d.isAnomaly ? 'ANOMALY' : 'NORMAL'}
+                                    </span>
+                                  </div>
+                                  <div style={{ color: 'var(--text-secondary)' }}>Device: <strong style={{ color: '#fff' }}>{d.deviceId}</strong></div>
+                                  <div style={{ color: 'var(--text-secondary)' }}>Threat Classification: <strong style={{ color: ATTACK_COLORS[d.threat] || '#fff' }}>{d.threat}</strong></div>
+                                  <div style={{ color: 'var(--text-secondary)' }}>Anomaly Deviation Score: <strong style={{ color: d.isAnomaly ? '#fb7185' : '#38bdf8' }}>{d.anomalyScorePct}%</strong></div>
+                                  <div style={{ color: 'var(--text-secondary)' }}>Trigger Signal: <strong style={{ color: '#fbbf24' }}>{d.topDev}</strong></div>
+                                </div>
+                              );
+                            }}
                           />
-                          <Line type="monotone" dataKey="reconstruction_error" stroke="#38bdf8" strokeWidth={2} dot={{ r: 2 }} />
-                        </LineChart>
+                          <Area type="monotone" dataKey="anomalyScorePct" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#anomalyGradient)" dot={{ r: 2, fill: '#38bdf8' }} />
+                        </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   </div>

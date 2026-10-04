@@ -55,7 +55,7 @@ const getInitialApiBase = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return "http://localhost:8000/api/v1";
   }
-  return `${window.location.origin}/api/v1`;
+  return "https://iot-ids.onrender.com/api/v1";
 };
 
 const ATTACK_COLORS = {

@@ -124,10 +124,11 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     return mapped_df
 
-def parse_uploaded_file_to_df(contents: bytes, filename: str) -> tuple[pd.DataFrame, int, str]:
+def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 2000) -> tuple[pd.DataFrame, int, str]:
     """
     Universally parses uploaded binary PCAP, CSV, TSV, JSON, JSONL, Zeek logs,
     or compressed gzip logs into a normalized DataFrame ready for 2-Stage inference.
+    Uses memory-efficient parsing to stay safely within free-tier container limits.
     Returns: (mapped_df, total_file_records, file_type_desc)
     """
     fn_lower = filename.lower()
@@ -142,29 +143,30 @@ def parse_uploaded_file_to_df(contents: bytes, filename: str) -> tuple[pd.DataFr
     if fn_lower.endswith(".gz") or contents[:2] == b"\x1f\x8b":
         decompressed = gzip.decompress(contents)
         try:
-            df = pd.read_csv(io.BytesIO(decompressed))
+            df = pd.read_csv(io.BytesIO(decompressed), nrows=max_rows, low_memory=False)
             mapped_df = map_arbitrary_dataframe(df)
             return mapped_df, len(df), "GZIP Compressed CSV Archive"
         except Exception:
-            df = pd.read_json(io.BytesIO(decompressed))
+            df = pd.read_json(io.BytesIO(decompressed), nrows=max_rows)
             mapped_df = map_arbitrary_dataframe(df)
             return mapped_df, len(df), "GZIP Compressed JSON Archive"
 
     # 3. JSON / JSON-Lines
     if fn_lower.endswith((".json", ".jsonl")):
         try:
-            df = pd.read_json(io.BytesIO(contents))
+            df = pd.read_json(io.BytesIO(contents), nrows=max_rows)
         except Exception:
             try:
-                df = pd.read_json(io.BytesIO(contents), lines=True)
+                df = pd.read_json(io.BytesIO(contents), lines=True, nrows=max_rows)
             except Exception:
                 raw_json = json.loads(contents.decode("utf-8", errors="replace"))
                 if isinstance(raw_json, dict):
-                    # Check common container keys
                     for key in ["data", "rows", "flows", "events", "records"]:
                         if key in raw_json and isinstance(raw_json[key], list):
                             raw_json = raw_json[key]
                             break
+                if isinstance(raw_json, list) and len(raw_json) > max_rows:
+                    raw_json = raw_json[:max_rows]
                 df = pd.DataFrame(raw_json)
         mapped_df = map_arbitrary_dataframe(df)
         return mapped_df, len(df), "JSON / JSON-Lines Dataset"
@@ -177,24 +179,24 @@ def parse_uploaded_file_to_df(contents: bytes, filename: str) -> tuple[pd.DataFr
             header_line = next((l for l in lines if l.startswith("#fields")), None)
             if header_line:
                 fields = header_line.replace("#fields", "").strip().split()
-                data_lines = [l.split("\t") if "\t" in l else l.split() for l in lines if not l.startswith("#")]
+                data_lines = [l.split("\t") if "\t" in l else l.split() for l in lines if not l.startswith("#")][:max_rows]
                 df = pd.DataFrame(data_lines, columns=fields[:len(data_lines[0])] if data_lines else None)
                 mapped_df = map_arbitrary_dataframe(df)
                 return mapped_df, len(df), "Zeek Network Security Log"
         except Exception:
             pass
 
-    # 5. CSV, TSV, or Delimited Plaintext Log
+    # 5. Fast Standard C CSV Reader with fallback
     for encoding in ["utf-8", "latin1", "cp1252"]:
         try:
-            df = pd.read_csv(io.BytesIO(contents), sep=None, engine="python", encoding=encoding)
+            df = pd.read_csv(io.BytesIO(contents), nrows=max_rows, low_memory=False, encoding=encoding)
             mapped_df = map_arbitrary_dataframe(df)
-            return mapped_df, len(df), f"Delimited Dataset ({len(df.columns)} cols)"
+            return mapped_df, len(df), f"CSV/Delimited Dataset ({len(df.columns)} cols)"
         except Exception:
             continue
 
     # Fallback default reader
-    df = pd.read_csv(io.BytesIO(contents), encoding="latin1")
+    df = pd.read_csv(io.BytesIO(contents), nrows=max_rows, encoding="latin1", low_memory=False)
     mapped_df = map_arbitrary_dataframe(df)
     return mapped_df, len(df), "CSV Dataset"
 
@@ -256,31 +258,45 @@ async def upload_and_analyze_dataset(
     Processes Wireshark captures (.pcap, .pcapng), CSV datasets, JSON logs, or Zeek telemetry
     through the 2-Stage ML Pipeline (Autoencoder Anomaly Gate + Supervised Attack Classifier)
     with feature explainability and fleet risk quantification.
+    Memory-optimized for cloud deployment.
     """
+    import gc
+
     if not pipeline_instance.is_loaded:
         pipeline_instance.load_artifacts()
 
     try:
+        # Cap max_rows to safe limit for 512MB free tier
+        safe_max_rows = min(max(10, int(max_rows)), 5000)
+
         contents = await file.read()
         if not contents or len(contents) == 0:
             raise HTTPException(status_code=400, detail="The uploaded file is empty.")
 
-        mapped_df, total_file_records, file_type_desc = parse_uploaded_file_to_df(contents, file.filename)
+        mapped_df, total_file_records, file_type_desc = parse_uploaded_file_to_df(
+            contents, file.filename, max_rows=safe_max_rows
+        )
+
+        # Release raw upload bytes from memory
+        del contents
+        gc.collect()
 
         if len(mapped_df) == 0:
             raise HTTPException(status_code=400, detail="Uploaded file produced 0 valid network flow records.")
 
-        if len(mapped_df) > max_rows:
-            mapped_df = mapped_df.iloc[:max_rows]
+        if len(mapped_df) > safe_max_rows:
+            mapped_df = mapped_df.iloc[:safe_max_rows]
 
         # Extract features matrix and scale
         X_raw = mapped_df[FEATURE_COLUMNS].values.astype(np.float32)
         X_scaled = pipeline_instance.scaler.transform(X_raw)
         
         # Stage 1: Batch PyTorch Autoencoder Anomaly Scoring
-        tensor_vals = torch.tensor(X_scaled, dtype=torch.float32).to(pipeline_instance.device)
-        recon_errors = pipeline_instance.autoencoder.compute_reconstruction_error(tensor_vals)
-        feature_deviations = pipeline_instance.autoencoder.get_feature_deviations(tensor_vals)
+        with torch.no_grad():
+            tensor_vals = torch.tensor(X_scaled, dtype=torch.float32).to(pipeline_instance.device)
+            recon_errors = pipeline_instance.autoencoder.compute_reconstruction_error(tensor_vals)
+            feature_deviations = pipeline_instance.autoencoder.get_feature_deviations(tensor_vals)
+            del tensor_vals
 
         # Stage 2: Supervised Multi-class Attack Attribution
         class_probs = pipeline_instance.classifier.predict_proba(X_scaled)
@@ -307,7 +323,9 @@ async def upload_and_analyze_dataset(
 
         from ml.explainability import extract_top_deviations
 
-        for idx in range(len(mapped_df)):
+        total_records = len(mapped_df)
+
+        for idx in range(total_records):
             dev_id = device_ids[idx]
             is_anom = bool(is_anomalies[idx])
             raw_recon = float(recon_errors[idx])
@@ -342,13 +360,14 @@ async def upload_and_analyze_dataset(
 
             attack_distribution[final_status] = attack_distribution.get(final_status, 0) + 1
 
-            # Extract top deviations for flow explainability
-            top_devs = extract_top_deviations(feature_deviations[idx], X_raw[idx], top_k=2)
-            top_dev = top_devs[0] if top_devs else None
-
-            if top_dev:
-                feat_name = top_dev["feature"]
-                top_deviating_features_fleet[feat_name] = top_deviating_features_fleet.get(feat_name, 0) + 1
+            # Extract top deviations for flow explainability (for anomalies or first 100 rows)
+            top_dev = None
+            if is_anom or idx < 100:
+                top_devs = extract_top_deviations(feature_deviations[idx], X_raw[idx], top_k=2)
+                top_dev = top_devs[0] if top_devs else None
+                if top_dev:
+                    feat_name = top_dev["feature"]
+                    top_deviating_features_fleet[feat_name] = top_deviating_features_fleet.get(feat_name, 0) + 1
 
             # Aggregate Device Rollup
             if dev_id not in device_summary:
@@ -377,22 +396,24 @@ async def upload_and_analyze_dataset(
                 if label_val not in dev_rec["top_deviating_signals"]:
                     dev_rec["top_deviating_signals"].append(label_val)
 
-            row_record = {
-                "row_index": idx + 1,
-                "device_id": dev_id,
-                "is_anomaly": is_anom,
-                "classification": final_status,
-                "reconstruction_error": round(raw_recon, 6),
-                "anomaly_score": round(norm_anom, 4),
-                "attack_confidence": round(conf, 4),
-                "risk_score": risk_val,
-                "severity": severity,
-                "top_deviation": top_dev
-            }
-            if has_ground_truth:
-                row_record["ground_truth"] = ground_truths[idx]
+            # Keep row record in response (up to 500 rows to keep JSON response lightweight)
+            if len(results) < 500 or is_anom:
+                row_record = {
+                    "row_index": idx + 1,
+                    "device_id": dev_id,
+                    "is_anomaly": is_anom,
+                    "classification": final_status,
+                    "reconstruction_error": round(raw_recon, 6),
+                    "anomaly_score": round(norm_anom, 4),
+                    "attack_confidence": round(conf, 4),
+                    "risk_score": risk_val,
+                    "severity": severity,
+                    "top_deviation": top_dev
+                }
+                if has_ground_truth:
+                    row_record["ground_truth"] = ground_truths[idx]
 
-            results.append(row_record)
+                results.append(row_record)
 
         # Format device summaries
         formatted_devices = []
@@ -427,13 +448,17 @@ async def upload_and_analyze_dataset(
         sorted_fleet_signals = sorted(top_deviating_features_fleet.items(), key=lambda x: x[1], reverse=True)[:5]
         top_signals_summary = [{"feature": f, "anomalous_occurrences": count} for f, count in sorted_fleet_signals]
 
+        # Explicit garbage collection
+        del mapped_df, X_raw, X_scaled
+        gc.collect()
+
         return {
             "filename": file.filename,
             "file_type": file_type_desc,
-            "total_records_analyzed": len(results),
+            "total_records_analyzed": total_records,
             "total_file_records": total_file_records,
             "anomalies_detected": anomaly_count,
-            "anomaly_rate_percentage": round((anomaly_count / len(results)) * 100, 2) if len(results) > 0 else 0.0,
+            "anomaly_rate_percentage": round((anomaly_count / total_records) * 100, 2) if total_records > 0 else 0.0,
             "attack_family_breakdown": attack_distribution,
             "severity_breakdown": severity_distribution,
             "high_risk_devices_affected": list(high_risk_devices),

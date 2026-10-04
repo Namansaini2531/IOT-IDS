@@ -32,7 +32,11 @@ import {
   PlusCircle,
   Settings as SettingsIcon,
   Globe,
-  Link2
+  Link2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import {
   LineChart,
@@ -87,6 +91,8 @@ export default function App() {
   const [analysisSearch, setAnalysisSearch] = useState('');
   const [uploadToast, setUploadToast] = useState('');
   const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('ALL');
+  const [tablePage, setTablePage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
 
   // Simulator Form State (Lab Tab)
   const [simForm, setSimForm] = useState({
@@ -616,59 +622,141 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div style={{ overflowX: 'auto', maxHeight: '520px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left', color: 'var(--text-secondary)' }}>
-                          <th style={{ padding: '0.65rem' }}>#</th>
-                          <th style={{ padding: '0.65rem' }}>IoT Endpoint / IP</th>
-                          <th style={{ padding: '0.65rem' }}>Stage 1 Verdict</th>
-                          <th style={{ padding: '0.65rem' }}>Stage 2 Attack Attribution</th>
-                          <th style={{ padding: '0.65rem' }}>Recon MSE</th>
-                          <th style={{ padding: '0.65rem' }}>Risk Score</th>
-                          <th style={{ padding: '0.65rem' }}>Root Cause Signal Deviation</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fileAnalysisResult.rows
-                          .filter(r => {
-                            if (selectedDeviceFilter !== 'ALL' && r.device_id !== selectedDeviceFilter) return false;
-                            if (analysisFilter === 'ANOMALY_ONLY' && !r.is_anomaly) return false;
-                            if (analysisFilter === 'CRITICAL' && !['CRITICAL', 'HIGH'].includes(r.severity)) return false;
-                            if (analysisSearch) {
-                              const query = analysisSearch.toLowerCase();
-                              return r.device_id.toLowerCase().includes(query) || r.classification.toLowerCase().includes(query);
-                            }
-                            return true;
-                          })
-                          .map((row) => (
-                            <tr key={row.row_index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', background: row.is_anomaly ? 'rgba(244, 63, 94, 0.03)' : 'transparent' }}>
-                              <td style={{ padding: '0.65rem', color: 'var(--text-muted)' }}>{row.row_index}</td>
-                              <td style={{ padding: '0.65rem', fontWeight: 600, color: '#f8fafc' }}>{row.device_id}</td>
-                              <td style={{ padding: '0.65rem' }}>
-                                <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: row.is_anomaly ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: row.is_anomaly ? '#fb7185' : '#34d399', border: `1px solid ${row.is_anomaly ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}` }}>
-                                  {row.is_anomaly ? "ANOMALY" : "NORMAL"}
-                                </span>
-                              </td>
-                              <td style={{ padding: '0.65rem', fontWeight: 700, color: ATTACK_COLORS[row.classification] || '#fff' }}>
-                                {row.classification}
-                              </td>
-                              <td style={{ padding: '0.65rem', fontFamily: 'var(--font-mono)' }}>
-                                {row.reconstruction_error.toFixed(4)}
-                              </td>
-                              <td style={{ padding: '0.65rem' }}>
-                                <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600, background: row.severity === 'CRITICAL' ? 'rgba(244, 63, 94, 0.15)' : row.severity === 'HIGH' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.12)', color: row.severity === 'CRITICAL' ? '#fb7185' : row.severity === 'HIGH' ? '#fbbf24' : '#34d399', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                                  {(row.risk_score * 100).toFixed(0)}% [{row.severity}]
-                                </span>
-                              </td>
-                              <td style={{ padding: '0.65rem', color: 'var(--text-secondary)' }}>
-                                {row.top_deviation ? `${row.top_deviation.label} (${row.top_deviation.observed_value})` : 'Normal Baseline'}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {(() => {
+                    const filteredRows = (fileAnalysisResult.rows || []).filter(r => {
+                      if (selectedDeviceFilter !== 'ALL' && r.device_id !== selectedDeviceFilter) return false;
+                      if (analysisFilter === 'ANOMALY_ONLY' && !r.is_anomaly) return false;
+                      if (analysisFilter === 'CRITICAL' && !['CRITICAL', 'HIGH'].includes(r.severity)) return false;
+                      if (analysisSearch) {
+                        const query = analysisSearch.toLowerCase();
+                        return r.device_id.toLowerCase().includes(query) || r.classification.toLowerCase().includes(query);
+                      }
+                      return true;
+                    });
+
+                    const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+                    const safePage = Math.min(tablePage, totalPages);
+                    const paginatedRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+                    return (
+                      <>
+                        <div style={{ overflowX: 'auto', maxHeight: '520px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left', color: 'var(--text-secondary)' }}>
+                                <th style={{ padding: '0.65rem' }}>#</th>
+                                <th style={{ padding: '0.65rem' }}>IoT Endpoint / IP</th>
+                                <th style={{ padding: '0.65rem' }}>Stage 1 Verdict</th>
+                                <th style={{ padding: '0.65rem' }}>Stage 2 Attack Attribution</th>
+                                <th style={{ padding: '0.65rem' }}>Recon MSE</th>
+                                <th style={{ padding: '0.65rem' }}>Risk Score</th>
+                                <th style={{ padding: '0.65rem' }}>Root Cause Signal Deviation</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedRows.length > 0 ? (
+                                paginatedRows.map((row) => (
+                                  <tr key={row.row_index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', background: row.is_anomaly ? 'rgba(244, 63, 94, 0.03)' : 'transparent' }}>
+                                    <td style={{ padding: '0.65rem', color: 'var(--text-muted)' }}>{row.row_index}</td>
+                                    <td style={{ padding: '0.65rem', fontWeight: 600, color: '#f8fafc' }}>{row.device_id}</td>
+                                    <td style={{ padding: '0.65rem' }}>
+                                      <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: row.is_anomaly ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: row.is_anomaly ? '#fb7185' : '#34d399', border: `1px solid ${row.is_anomaly ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}` }}>
+                                        {row.is_anomaly ? "ANOMALY" : "NORMAL"}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '0.65rem', fontWeight: 700, color: ATTACK_COLORS[row.classification] || '#fff' }}>
+                                      {row.classification}
+                                    </td>
+                                    <td style={{ padding: '0.65rem', fontFamily: 'var(--font-mono)' }}>
+                                      {row.reconstruction_error.toFixed(4)}
+                                    </td>
+                                    <td style={{ padding: '0.65rem' }}>
+                                      <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600, background: row.severity === 'CRITICAL' ? 'rgba(244, 63, 94, 0.15)' : row.severity === 'HIGH' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.12)', color: row.severity === 'CRITICAL' ? '#fb7185' : row.severity === 'HIGH' ? '#fbbf24' : '#34d399', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                                        {(row.risk_score * 100).toFixed(0)}% [{row.severity}]
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '0.65rem', color: 'var(--text-secondary)' }}>
+                                      {row.top_deviation ? `${row.top_deviation.label} (${row.top_deviation.observed_value})` : 'Normal Baseline'}
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                    No network flow records match the selected search/filter.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Pagination Bar */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <span>
+                              Showing <strong>{filteredRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1}</strong> - <strong>{Math.min(safePage * pageSize, filteredRows.length)}</strong> of <strong>{filteredRows.length.toLocaleString()}</strong> flows
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span>Per page:</span>
+                              <select
+                                value={pageSize}
+                                onChange={(e) => {
+                                  setPageSize(Number(e.target.value));
+                                  setTablePage(1);
+                                }}
+                                style={{ padding: '0.2rem 0.4rem', background: '#09090d', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#fff', borderRadius: '4px', fontSize: '0.74rem' }}
+                              >
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                                <option value={200}>200</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <button
+                              onClick={() => setTablePage(1)}
+                              disabled={safePage <= 1}
+                              title="First Page"
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage <= 1 ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage <= 1 ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                              <ChevronsLeft size={14} />
+                            </button>
+                            <button
+                              onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                              disabled={safePage <= 1}
+                              title="Previous Page"
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage <= 1 ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage <= 1 ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                              <ChevronLeft size={14} />
+                            </button>
+
+                            <span style={{ fontSize: '0.76rem', color: '#f4f4f6', padding: '0 0.5rem', fontWeight: 600 }}>
+                              Page {safePage} of {totalPages}
+                            </span>
+
+                            <button
+                              onClick={() => setTablePage(p => Math.min(totalPages, p + 1))}
+                              disabled={safePage >= totalPages}
+                              title="Next Page"
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage >= totalPages ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage >= totalPages ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                            <button
+                              onClick={() => setTablePage(totalPages)}
+                              disabled={safePage >= totalPages}
+                              title="Last Page"
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage >= totalPages ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage >= totalPages ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                              <ChevronsRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
               </div>

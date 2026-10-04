@@ -251,16 +251,19 @@ def predict_single_flow(request: FlowInferenceRequest):
 @router.post("/upload-and-analyze")
 async def upload_and_analyze_dataset(
     file: UploadFile = File(...),
-    max_rows: int = Form(500)
+    max_rows: int = Form(500),
+    page: int = Form(1),
+    page_size: int = Form(100)
 ):
     """
     Universal ingestion and analysis endpoint:
     Processes Wireshark captures (.pcap, .pcapng), CSV datasets, JSON logs, or Zeek telemetry
     through the 2-Stage ML Pipeline (Autoencoder Anomaly Gate + Supervised Attack Classifier)
-    with feature explainability and fleet risk quantification.
+    with feature explainability, fleet risk quantification, and server-side pagination support.
     Memory-optimized for cloud deployment.
     """
     import gc
+    import math
 
     if not pipeline_instance.is_loaded:
         pipeline_instance.load_artifacts()
@@ -452,9 +455,14 @@ async def upload_and_analyze_dataset(
         del mapped_df, X_raw, X_scaled
         gc.collect()
 
+        total_pages = max(1, math.ceil(total_records / max(1, page_size)))
+
         return {
             "filename": file.filename,
             "file_type": file_type_desc,
+            "page": int(page),
+            "page_size": int(page_size),
+            "total_pages": total_pages,
             "total_records_analyzed": total_records,
             "total_file_records": total_file_records,
             "anomalies_detected": anomaly_count,

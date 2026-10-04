@@ -211,35 +211,10 @@ export default function App() {
             <Sliders size={15} color={activeTab === 'simulator' ? '#38bdf8' : 'currentColor'} />
             <span>Flow Injection Lab</span>
           </button>
-
-          <button
-            onClick={() => setActiveTab('architecture')}
-            className={`nav-tab-btn ${activeTab === 'architecture' ? 'active' : ''}`}
-          >
-            <BarChart3 size={15} color={activeTab === 'architecture' ? '#38bdf8' : 'currentColor'} />
-            <span>AI Architecture & Metrics</span>
-          </button>
-
-          <a
-            href="http://127.0.0.1:8000/docs"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nav-tab-btn"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            <Terminal size={14} />
-            <span>REST API</span>
-            <ExternalLink size={12} style={{ opacity: 0.7 }} />
-          </a>
         </div>
 
-        {/* Right: Engine Telemetry & Quick Action */}
+        {/* Right: Quick Action */}
         <div className="nav-actions-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#34d399', background: 'rgba(16, 185, 129, 0.08)', padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }}></span>
-            <span style={{ fontWeight: 600 }}>Dual AI Active</span>
-          </div>
-
           {fileAnalysisResult ? (
             <button
               onClick={handleDownloadReport}
@@ -794,79 +769,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-          </div>
-        )}
-
-        {/* Tab 3: AI Architecture & Thresholds */}
-        {activeTab === 'architecture' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            
-            <div className="glass-panel" style={{ padding: '1.75rem' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.4rem' }}>
-                2-Stage Machine Learning Pipeline Architecture
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: '800px' }}>
-                This system deploys an <strong>Unsupervised PyTorch Autoencoder</strong> as a first-line gatekeeper to identify out-of-distribution IoT network deviations, paired with a <strong>Supervised Random Forest Classifier</strong> to attribute specific attack types.
-              </p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginTop: '1.25rem' }}>
-                <div style={{ padding: '1.25rem', borderRadius: '10px', background: '#0b0b0f', border: '1px solid rgba(255, 255, 255, 0.07)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)' }}>
-                  <h4 style={{ color: '#38bdf8', fontSize: '0.92rem', fontWeight: 700, marginBottom: '0.4rem' }}>Stage 1: Autoencoder Gatekeeper</h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    Trained strictly on benign IoT baseline flows. Calibrated to the <strong>98th percentile MSE threshold</strong> ({evalReport?.stage1_autoencoder?.threshold ? evalReport.stage1_autoencoder.threshold.toFixed(4) : "0.1007"}) to strictly cap false positives at ~1.41% while maintaining 100% malicious recall.
-                  </p>
-                </div>
-
-                <div style={{ padding: '1.25rem', borderRadius: '10px', background: '#0b0b0f', border: '1px solid rgba(255, 255, 255, 0.07)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)' }}>
-                  <h4 style={{ color: '#a855f7', fontSize: '0.92rem', fontWeight: 700, marginBottom: '0.4rem' }}>Stage 2: Attack Classifier</h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    Attributes anomalous flows into 7 distinct threat classes (DDoS, DoS, Mirai-Botnet, Reconnaissance, BruteForce, Spoofing, Benign) with high confidence.
-                  </p>
-                </div>
-
-                <div style={{ padding: '1.25rem', borderRadius: '10px', background: '#0b0b0f', border: '1px solid rgba(255, 255, 255, 0.07)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)' }}>
-                  <h4 style={{ color: '#fbbf24', fontSize: '0.92rem', fontWeight: 700, marginBottom: '0.4rem' }}>Auditable Risk Engine</h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    Calculates an auditable, transparent 0–100% risk score combining reconstruction anomaly magnitude, attack family severity, and device historical threat frequency.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {evalReport && (
-              <div className="glass-panel" style={{ padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#f8fafc', marginBottom: '1rem' }}>
-                  Benchmark Evaluation Metrics
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                  <div style={{ padding: '1rem', background: '#0b0b0f', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Malicious Detection Recall</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981' }}>
-                      {((evalReport?.stage1_autoencoder?.recall ?? 1.0) * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div style={{ padding: '1rem', background: '#0b0b0f', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>False Positive Rate (FPR)</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#38bdf8' }}>
-                      {((evalReport?.stage1_autoencoder?.false_positive_rate ?? 0.0141) * 100).toFixed(2)}%
-                    </div>
-                  </div>
-                  <div style={{ padding: '1rem', background: '#0b0b0f', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Autoencoder F1-Score</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a855f7' }}>
-                      {((evalReport?.stage1_autoencoder?.f1_score ?? 0.9978) * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div style={{ padding: '1rem', background: '#0b0b0f', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Inference Latency</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fbbf24' }}>
-                      {(evalReport?.two_stage_combined?.total_inference_latency_ms ?? 0.0107).toFixed(4)} ms/flow
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
           </div>
         )}

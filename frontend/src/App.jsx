@@ -45,7 +45,7 @@ import {
   Pie
 } from 'recharts';
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = import.meta.env.VITE_API_BASE || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? "http://localhost:8000/api/v1" : "/api/v1");
 
 const ATTACK_COLORS = {
   "Benign": "#10b981",

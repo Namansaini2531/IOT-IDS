@@ -73,64 +73,25 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
     Flexibly matches columns from Wireshark, Zeek, Snort, Suricata,
     or arbitrary CSV/JSON logs to the 46 features expected by the 2-Stage pipeline.
-    Also handles feature derivations (magnitude, variance, rates, protocol indicators).
     """
     mapped_df = pd.DataFrame()
     df_cols_lower = {col.lower().replace("-", "_").replace(" ", "_").replace(".", "_"): col for col in df.columns}
 
     for target_col in FEATURE_COLUMNS:
-        found = False
         target_lower = target_col.lower().replace("-", "_").replace(" ", "_")
         if target_lower in df_cols_lower:
             mapped_df[target_col] = pd.to_numeric(df[df_cols_lower[target_lower]], errors='coerce').fillna(0.0)
-            found = True
         elif target_col in COLUMN_ALIASES:
+            found = False
             for alias in COLUMN_ALIASES[target_col]:
                 if alias in df_cols_lower:
                     mapped_df[target_col] = pd.to_numeric(df[df_cols_lower[alias]], errors='coerce').fillna(0.0)
                     found = True
                     break
-        
-        if not found:
+            if not found:
+                mapped_df[target_col] = 0.0
+        else:
             mapped_df[target_col] = 0.0
-
-    # Auto-derive missing statistical features if base metrics exist
-    if (mapped_df["Magnitue"] == 0.0).all() and not (mapped_df["AVG"] == 0.0).all():
-        mapped_df["Magnitue"] = np.sqrt(np.maximum(mapped_df["AVG"].values, 0.0))
-
-    if (mapped_df["Variance"] == 0.0).all() and not (mapped_df["Std"] == 0.0).all():
-        mapped_df["Variance"] = mapped_df["Std"].values ** 2
-
-    if (mapped_df["Radius"] == 0.0).all() and not (mapped_df["Std"] == 0.0).all():
-        mapped_df["Radius"] = mapped_df["Std"].values * 0.5
-
-    if (mapped_df["Weight"] == 0.0).all() and not (mapped_df["Number"] == 0.0).all():
-        mapped_df["Weight"] = mapped_df["Number"].values
-
-    if (mapped_df["Tot size"] == 0.0).all() and not (mapped_df["Tot sum"] == 0.0).all():
-        mapped_df["Tot size"] = mapped_df["Tot sum"].values
-
-    if (mapped_df["Rate"] == 0.0).all() and not (mapped_df["Number"] == 0.0).all():
-        durations = np.maximum(mapped_df["flow_duration"].values, 0.0001)
-        mapped_df["Rate"] = mapped_df["Number"].values / durations
-
-    # Protocol string inference if present in raw df (e.g. proto="TCP" or "UDP" or "HTTP")
-    for col in df.columns:
-        if any(p in col.lower() for p in ["proto", "protocol", "service"]):
-            series_str = df[col].astype(str).str.upper()
-            if (mapped_df["TCP"] == 0.0).all():
-                mapped_df["TCP"] = series_str.str.contains("TCP").astype(float)
-            if (mapped_df["UDP"] == 0.0).all():
-                mapped_df["UDP"] = series_str.str.contains("UDP").astype(float)
-            if (mapped_df["ICMP"] == 0.0).all():
-                mapped_df["ICMP"] = series_str.str.contains("ICMP").astype(float)
-            if (mapped_df["HTTP"] == 0.0).all():
-                mapped_df["HTTP"] = series_str.str.contains("HTTP").astype(float)
-            if (mapped_df["HTTPS"] == 0.0).all():
-                mapped_df["HTTPS"] = (series_str.str.contains("HTTPS") | series_str.str.contains("SSL") | series_str.str.contains("TLS")).astype(float)
-            if (mapped_df["DNS"] == 0.0).all():
-                mapped_df["DNS"] = series_str.str.contains("DNS").astype(float)
-            break
 
     # Device or IP identification candidate search
     dev_col = None

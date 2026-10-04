@@ -124,7 +124,7 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     return mapped_df
 
-def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 2000) -> tuple[pd.DataFrame, int, str]:
+def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: int = 25000) -> tuple[pd.DataFrame, int, str]:
     """
     Universally parses uploaded binary PCAP, CSV, TSV, JSON, JSONL, Zeek logs,
     or compressed gzip logs into a normalized DataFrame ready for 2-Stage inference.
@@ -266,8 +266,8 @@ async def upload_and_analyze_dataset(
         pipeline_instance.load_artifacts()
 
     try:
-        # Cap max_rows to safe limit for 512MB free tier
-        safe_max_rows = min(max(10, int(max_rows)), 5000)
+        # Support up to 20k/25k flows safely
+        safe_max_rows = min(max(10, int(max_rows)), 25000)
 
         contents = await file.read()
         if not contents or len(contents) == 0:

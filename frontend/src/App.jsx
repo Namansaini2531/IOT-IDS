@@ -410,18 +410,12 @@ export default function App() {
                     <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f8fafc' }}>
                       {fileAnalysisResult.total_records_analyzed.toLocaleString()}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      File contains {fileAnalysisResult.total_file_records.toLocaleString()} total rows
-                    </div>
                   </div>
 
                   <div className="glass-panel" style={{ padding: '1.25rem' }}>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>IoT Devices / Endpoints Found</div>
                     <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#38bdf8' }}>
                       {fileAnalysisResult.total_devices_scanned || (fileAnalysisResult.device_summaries ? fileAnalysisResult.device_summaries.length : 1)} Nodes
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      Distinct IPs / device fingerprints
                     </div>
                   </div>
 
@@ -430,18 +424,12 @@ export default function App() {
                     <div style={{ fontSize: '1.6rem', fontWeight: 800, color: fileAnalysisResult.anomalies_detected > 0 ? '#f43f5e' : '#10b981' }}>
                       {fileAnalysisResult.anomalies_detected.toLocaleString()}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      Fleet Anomaly Rate: <strong>{fileAnalysisResult.anomaly_rate_percentage}%</strong>
-                    </div>
                   </div>
 
                   <div className="glass-panel" style={{ padding: '1.25rem' }}>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>High-Risk Compromised Devices</div>
                     <div style={{ fontSize: '1.6rem', fontWeight: 800, color: fileAnalysisResult.high_risk_devices_affected.length > 0 ? '#f59e0b' : '#10b981' }}>
                       {fileAnalysisResult.high_risk_devices_affected.length} Devices
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      Exhibiting severe attack patterns
                     </div>
                   </div>
                 </div>

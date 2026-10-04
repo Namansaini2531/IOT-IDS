@@ -29,7 +29,10 @@ import {
   Flame,
   Filter,
   ExternalLink,
-  PlusCircle
+  PlusCircle,
+  Settings as SettingsIcon,
+  Globe,
+  Link2
 } from 'lucide-react';
 import {
   LineChart,
@@ -45,7 +48,15 @@ import {
   Pie
 } from 'recharts';
 
-const API_BASE = import.meta.env.VITE_API_BASE || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? "http://localhost:8000/api/v1" : "/api/v1");
+const getInitialApiBase = () => {
+  const stored = localStorage.getItem("iot_ids_api_base");
+  if (stored) return stored.replace(/\/$/, "");
+  if (import.meta.env.VITE_API_BASE) return import.meta.env.VITE_API_BASE.replace(/\/$/, "");
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return "http://localhost:8000/api/v1";
+  }
+  return `${window.location.origin}/api/v1`;
+};
 
 const ATTACK_COLORS = {
   "Benign": "#10b981",
@@ -60,7 +71,11 @@ const ATTACK_COLORS = {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('analyzer'); // 'analyzer' | 'simulator' | 'architecture'
+  const [apiBase, setApiBase] = useState(getInitialApiBase());
+  const [customApiInput, setCustomApiInput] = useState(apiBase);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [systemStatus, setSystemStatus] = useState(null);
+  const [backendConnected, setBackendConnected] = useState(null);
   const [evalReport, setEvalReport] = useState(null);
 
   // File Upload & Dataset Analyzer State
@@ -90,18 +105,45 @@ export default function App() {
 
   const fileInputRef = useRef(null);
 
-  // Fetch System Status & Model Report
-  useEffect(() => {
-    fetch(`${API_BASE}/status`)
-      .then(res => res.json())
-      .then(data => setSystemStatus(data))
-      .catch(err => console.error("Status fetch error:", err));
+  // Check Backend Connectivity & Fetch System Status
+  const checkBackendHealth = (targetUrl = apiBase) => {
+    fetch(`${targetUrl}/status`)
+      .then(res => {
+        if (!res.ok) throw new Error("Status failed");
+        return res.json();
+      })
+      .then(data => {
+        setSystemStatus(data);
+        setBackendConnected(true);
+      })
+      .catch(err => {
+        console.error("Backend status check error:", err);
+        setBackendConnected(false);
+      });
 
-    fetch(`${API_BASE}/evaluation-report`)
+    fetch(`${targetUrl}/evaluation-report`)
       .then(res => res.json())
       .then(data => setEvalReport(data))
-      .catch(err => console.error("Eval report error:", err));
-  }, []);
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    checkBackendHealth(apiBase);
+  }, [apiBase]);
+
+  const handleSaveApiUrl = (e) => {
+    e?.preventDefault();
+    let cleaned = customApiInput.trim().replace(/\/$/, "");
+    if (!cleaned.endsWith("/api/v1") && !cleaned.endsWith("/api")) {
+      cleaned = `${cleaned}/api/v1`;
+    }
+    setApiBase(cleaned);
+    setCustomApiInput(cleaned);
+    localStorage.setItem("iot_ids_api_base", cleaned);
+    setShowSettingsModal(false);
+    checkBackendHealth(cleaned);
+    setUploadToast(`Backend URL updated to ${cleaned}`);
+  };
 
   // Upload File & Analyze with 2-Stage AI Model
   const handleUploadAndAnalyze = async () => {
@@ -113,23 +155,33 @@ export default function App() {
       formData.append("file", selectedFile);
       formData.append("max_rows", maxAnalyzeRows);
 
-      const res = await fetch(`${API_BASE}/upload-and-analyze`, {
+      const res = await fetch(`${apiBase}/upload-and-analyze`, {
         method: "POST",
         body: formData
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to analyze file");
+        let errMsg = "Failed to analyze file";
+        try {
+          const err = await res.json();
+          errMsg = err.detail || errMsg;
+        } catch (_) {}
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
       setFileAnalysisResult(data);
       setSelectedDeviceFilter('ALL');
+      setBackendConnected(true);
       setUploadToast(`Analysis Complete: Scanned ${data.total_records_analyzed} flows across ${data.total_devices_scanned || 0} IoT devices. Detected ${data.anomalies_detected} anomalies.`);
     } catch (err) {
       console.error(err);
-      setUploadToast(`Error: ${err.message}`);
+      setBackendConnected(false);
+      if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
+        setUploadToast(`Connection Error: Unable to reach backend at '${apiBase}'. If your Render backend was idle, it may take 45-60s to wake up, or click 'Configure Backend URL' in the top right to verify.`);
+      } else {
+        setUploadToast(`Error: ${err.message}`);
+      }
     } finally {
       setIsAnalyzingFile(false);
     }
@@ -140,7 +192,7 @@ export default function App() {
     e.preventDefault();
     setSimLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/predict`, {
+      const res = await fetch(`${apiBase}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -194,24 +246,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Center: Navigation Links */}
-        <div className="nav-tabs-wrapper">
-          <button
-            onClick={() => setActiveTab('analyzer')}
-            className={`nav-tab-btn ${activeTab === 'analyzer' ? 'active' : ''}`}
-          >
-            <UploadCloud size={15} color={activeTab === 'analyzer' ? '#38bdf8' : 'currentColor'} />
-            <span>Log & PCAP Analyzer</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('simulator')}
-            className={`nav-tab-btn ${activeTab === 'simulator' ? 'active' : ''}`}
-          >
-            <Sliders size={15} color={activeTab === 'simulator' ? '#38bdf8' : 'currentColor'} />
-            <span>Flow Injection Lab</span>
-          </button>
-        </div>
+
 
         {/* Right: Quick Action */}
         <div className="nav-actions-group">
@@ -667,111 +702,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 2: Flow Injection Lab */}
-        {activeTab === 'simulator' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
-            
-            <div className="glass-panel" style={{ padding: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.4rem', color: '#f8fafc' }}>
-                Manual IoT Flow Parameter Tester
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Simulate edge packet telemetry to evaluate how the Autoencoder reconstruction gatekeeper and classifier triage attacks.
-              </p>
 
-              <form onSubmit={handleRunSimulation} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>Flow Duration (s)</label>
-                    <input
-                      type="number" step="0.001"
-                      value={simForm.flow_duration}
-                      onChange={(e) => setSimForm({ ...simForm, flow_duration: parseFloat(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '0.5rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>Packet Rate (pkts/sec)</label>
-                    <input
-                      type="number" step="1"
-                      value={simForm.Rate}
-                      onChange={(e) => setSimForm({ ...simForm, Rate: parseFloat(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '0.5rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>TCP Protocol (1 or 0)</label>
-                    <input
-                      type="number" min="0" max="1"
-                      value={simForm.TCP}
-                      onChange={(e) => setSimForm({ ...simForm, TCP: parseInt(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '0.5rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>SYN Flags Count</label>
-                    <input
-                      type="number"
-                      value={simForm.syn_flag_number}
-                      onChange={(e) => setSimForm({ ...simForm, syn_flag_number: parseInt(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '0.5rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px' }}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={simLoading}
-                  style={{
-                    marginTop: '0.5rem', padding: '0.7rem', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.4)',
-                    background: 'linear-gradient(135deg, #1c1e28, #101117)', color: '#fff', fontWeight: 700, cursor: 'pointer',
-                    boxShadow: '0 8px 20px rgba(0,0,0,0.8)'
-                  }}
-                >
-                  {simLoading ? "Evaluating Flow..." : "Evaluate Simulated Flow"}
-                </button>
-              </form>
-            </div>
-
-            {/* Result Card */}
-            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc' }}>
-                Live Triage Diagnostics
-              </h3>
-              {simResult ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: simResult.is_anomaly ? 'rgba(244, 63, 94, 0.12)' : 'rgba(16, 185, 129, 0.12)', borderRadius: '8px', border: `1px solid ${simResult.is_anomaly ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}` }}>
-                    <span style={{ fontWeight: 700, color: simResult.is_anomaly ? '#fb7185' : '#34d399' }}>
-                      {simResult.is_anomaly ? "ANOMALOUS FLOW" : "BENIGN FLOW"}
-                    </span>
-                    <span style={{ fontWeight: 700, color: ATTACK_COLORS[simResult.classification] || '#fff' }}>
-                      {simResult.classification} ({((simResult.attack_confidence || 0) * 100).toFixed(1)}%)
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div style={{ background: '#09090d', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Reconstruction MSE</div>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#38bdf8' }}>{simResult.reconstruction_error.toFixed(4)}</div>
-                    </div>
-                    <div style={{ background: '#09090d', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Assessed Risk Score</div>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fbbf24' }}>{(simResult.risk_assessment.risk_score * 100).toFixed(1)}%</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', textAlign: 'center', margin: 'auto' }}>
-                  Submit parameters on the left to evaluate risk.
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
 
       </main>
 

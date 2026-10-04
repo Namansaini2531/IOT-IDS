@@ -1,5 +1,8 @@
 import io
 import json
+import gzip
+import math
+import torch
 import pandas as pd
 import numpy as np
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -16,45 +19,67 @@ class FlowInferenceRequest(BaseModel):
     device_id: Optional[str] = "iot-camera-01 (192.168.1.101)"
     flow_features: Dict[str, float]
 
-# Common column aliases for mapping arbitrary datasets (Windhawk, Zeek, Wireshark, CICFlowMeter, etc.)
+# Extensive column aliases for mapping arbitrary datasets (Wireshark, Zeek, Snort, CICFlowMeter, NetFlow, Suricata, etc.)
 COLUMN_ALIASES = {
-    "flow_duration": ["duration", "dur", "flow_duration", "time_delta", "time"],
-    "Rate": ["rate", "packet_rate", "pkt_rate", "packets_per_sec", "flow_rate"],
-    "Srate": ["srate", "src_rate", "source_rate", "fwd_rate"],
-    "Drate": ["drate", "dst_rate", "dest_rate", "bwd_rate"],
-    "Header_Length": ["header_length", "hdr_len", "header_len", "ihl"],
-    "Protocol Type": ["protocol", "proto", "protocol_type", "ip_proto"],
-    "syn_flag_number": ["syn", "syn_flag", "syn_count", "tcp_syn"],
-    "ack_flag_number": ["ack", "ack_flag", "ack_count", "tcp_ack"],
-    "rst_flag_number": ["rst", "rst_flag", "tcp_rst"],
-    "fin_flag_number": ["fin", "fin_flag", "tcp_fin"],
-    "psh_flag_number": ["psh", "psh_flag", "tcp_psh"],
-    "TCP": ["tcp", "is_tcp"],
-    "UDP": ["udp", "is_udp"],
-    "ICMP": ["icmp", "is_icmp"],
-    "HTTP": ["http", "is_http"],
-    "HTTPS": ["https", "is_https", "tls", "ssl"],
-    "DNS": ["dns", "is_dns"],
-    "Tot sum": ["tot_sum", "tot_bytes", "total_bytes", "bytes", "length", "size", "bytes_total", "flow_bytes"],
-    "AVG": ["avg", "avg_size", "mean_size", "packet_size_avg", "mean_pkt_len"],
-    "Min": ["min", "min_size", "min_pkt_len"],
-    "Max": ["max", "max_size", "max_pkt_len"],
-    "Std": ["std", "std_size", "std_pkt_len"],
-    "IAT": ["iat", "inter_arrival_time", "flow_iat_mean", "mean_iat"],
-    "Number": ["number", "packet_count", "packets", "pkt_count", "tot_packets", "total_packets"]
+    "flow_duration": ["duration", "dur", "flow_duration", "time_delta", "time", "flow_dur", "f_duration", "delta", "td"],
+    "Header_Length": ["header_length", "hdr_len", "header_len", "ihl", "tot_hdr_len", "fwd_header_length", "bwd_header_length", "head_len"],
+    "Protocol Type": ["protocol", "proto", "protocol_type", "ip_proto", "trans_protocol", "proto_num", "ip_p"],
+    "Duration": ["duration", "dur", "flow_duration", "time_delta", "flow_duration_sec", "dur_sec"],
+    "Rate": ["rate", "packet_rate", "pkt_rate", "packets_per_sec", "flow_rate", "pkts_per_sec", "packets/s", "flow_pkts_s"],
+    "Srate": ["srate", "src_rate", "source_rate", "fwd_rate", "fwd_pkts_per_sec", "fwd_packets/s"],
+    "Drate": ["drate", "dst_rate", "dest_rate", "bwd_rate", "bwd_pkts_per_sec", "bwd_packets/s"],
+    "fin_flag_number": ["fin", "fin_flag", "tcp_fin", "fin_flag_number", "fin_flag_cnt", "fin_cnt", "f_flag"],
+    "syn_flag_number": ["syn", "syn_flag", "tcp_syn", "syn_flag_number", "syn_flag_cnt", "syn_cnt", "s_flag"],
+    "rst_flag_number": ["rst", "rst_flag", "tcp_rst", "rst_flag_number", "rst_flag_cnt", "rst_cnt", "r_flag"],
+    "psh_flag_number": ["psh", "psh_flag", "tcp_psh", "psh_flag_number", "psh_flag_cnt", "psh_cnt", "p_flag"],
+    "ack_flag_number": ["ack", "ack_flag", "tcp_ack", "ack_flag_number", "ack_flag_cnt", "ack_cnt", "a_flag"],
+    "ece_flag_number": ["ece", "ece_flag", "tcp_ece", "ece_flag_number", "ece_cnt", "e_flag"],
+    "cwr_flag_number": ["cwr", "cwr_flag", "tcp_cwr", "cwr_flag_number", "cwr_cnt", "c_flag"],
+    "ack_count": ["ack_count", "ack_cnt", "num_acks", "ack"],
+    "syn_count": ["syn_count", "syn_cnt", "num_syns", "syn"],
+    "fin_count": ["fin_count", "fin_cnt", "num_fins", "fin"],
+    "urg_count": ["urg_count", "urg_cnt", "num_urgs", "urg", "urg_flag_cnt"],
+    "rst_count": ["rst_count", "rst_cnt", "num_rsts", "rst"],
+    "HTTP": ["http", "is_http", "service_http", "proto_http"],
+    "HTTPS": ["https", "is_https", "tls", "ssl", "service_ssl", "service_https"],
+    "DNS": ["dns", "is_dns", "service_dns", "proto_dns"],
+    "Telnet": ["telnet", "is_telnet", "service_telnet", "proto_telnet"],
+    "SMTP": ["smtp", "is_smtp", "service_smtp", "proto_smtp"],
+    "SSH": ["ssh", "is_ssh", "service_ssh", "proto_ssh"],
+    "IRC": ["irc", "is_irc", "service_irc", "proto_irc"],
+    "TCP": ["tcp", "is_tcp", "proto_tcp"],
+    "UDP": ["udp", "is_udp", "proto_udp"],
+    "DHCP": ["dhcp", "is_dhcp", "service_dhcp", "proto_dhcp", "bootp"],
+    "ARP": ["arp", "is_arp", "proto_arp"],
+    "ICMP": ["icmp", "is_icmp", "proto_icmp"],
+    "IPv": ["ipv", "is_ipv4", "is_ip", "ip_version", "ip_ver"],
+    "LLC": ["llc", "is_llc"],
+    "Tot sum": ["tot_sum", "tot_bytes", "total_bytes", "bytes", "length", "size", "bytes_total", "flow_bytes", "tot_len", "flow_byts/s", "total_length", "tot_payload_bytes"],
+    "Min": ["min", "min_size", "min_pkt_len", "pkt_len_min", "min_packet_size", "fwd_pkt_len_min"],
+    "Max": ["max", "max_size", "max_pkt_len", "pkt_len_max", "max_packet_size", "fwd_pkt_len_max"],
+    "AVG": ["avg", "avg_size", "mean_size", "packet_size_avg", "mean_pkt_len", "pkt_len_mean", "avg_packet_size", "fwd_pkt_len_mean"],
+    "Std": ["std", "std_size", "std_pkt_len", "pkt_len_std", "std_packet_size", "fwd_pkt_len_std"],
+    "Tot size": ["tot_size", "tot_sum", "tot_bytes", "total_bytes", "tot_len", "total_size", "fwd_header_length"],
+    "IAT": ["iat", "inter_arrival_time", "flow_iat_mean", "mean_iat", "iat_mean", "flow_iat_avg"],
+    "Number": ["number", "packet_count", "packets", "pkt_count", "tot_packets", "total_packets", "tot_pkts", "flow_pkts/s", "count"],
+    "Magnitue": ["magnitue", "magnitude", "pkt_magnitude"],
+    "Radius": ["radius", "pkt_radius"],
+    "Covariance": ["covariance", "pkt_covariance"],
+    "Variance": ["variance", "var", "pkt_variance"],
+    "Weight": ["weight", "packet_weight", "pkt_weight"]
 }
 
 def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Flexibly matches columns from Windhawk/Zeek/Wireshark/CSV files
-    to the 46 features expected by the CICIoT-trained 2-Stage pipeline.
+    Flexibly matches columns from Wireshark, Zeek, Snort, Suricata,
+    or arbitrary CSV/JSON logs to the 46 features expected by the 2-Stage pipeline.
+    Also handles feature derivations (magnitude, variance, rates, protocol indicators).
     """
     mapped_df = pd.DataFrame()
-    df_cols_lower = {col.lower().replace("-", "_").replace(" ", "_"): col for col in df.columns}
+    df_cols_lower = {col.lower().replace("-", "_").replace(" ", "_").replace(".", "_"): col for col in df.columns}
 
     for target_col in FEATURE_COLUMNS:
         found = False
-        # Direct match check
         target_lower = target_col.lower().replace("-", "_").replace(" ", "_")
         if target_lower in df_cols_lower:
             mapped_df[target_col] = pd.to_numeric(df[df_cols_lower[target_lower]], errors='coerce').fillna(0.0)
@@ -69,9 +94,47 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         if not found:
             mapped_df[target_col] = 0.0
 
-    # Device or IP identification
+    # Auto-derive missing statistical features if base metrics exist
+    if (mapped_df["Magnitue"] == 0.0).all() and not (mapped_df["AVG"] == 0.0).all():
+        mapped_df["Magnitue"] = np.sqrt(np.maximum(mapped_df["AVG"].values, 0.0))
+
+    if (mapped_df["Variance"] == 0.0).all() and not (mapped_df["Std"] == 0.0).all():
+        mapped_df["Variance"] = mapped_df["Std"].values ** 2
+
+    if (mapped_df["Radius"] == 0.0).all() and not (mapped_df["Std"] == 0.0).all():
+        mapped_df["Radius"] = mapped_df["Std"].values * 0.5
+
+    if (mapped_df["Weight"] == 0.0).all() and not (mapped_df["Number"] == 0.0).all():
+        mapped_df["Weight"] = mapped_df["Number"].values
+
+    if (mapped_df["Tot size"] == 0.0).all() and not (mapped_df["Tot sum"] == 0.0).all():
+        mapped_df["Tot size"] = mapped_df["Tot sum"].values
+
+    if (mapped_df["Rate"] == 0.0).all() and not (mapped_df["Number"] == 0.0).all():
+        durations = np.maximum(mapped_df["flow_duration"].values, 0.0001)
+        mapped_df["Rate"] = mapped_df["Number"].values / durations
+
+    # Protocol string inference if present in raw df (e.g. proto="TCP" or "UDP" or "HTTP")
+    for col in df.columns:
+        if any(p in col.lower() for p in ["proto", "protocol", "service"]):
+            series_str = df[col].astype(str).str.upper()
+            if (mapped_df["TCP"] == 0.0).all():
+                mapped_df["TCP"] = series_str.str.contains("TCP").astype(float)
+            if (mapped_df["UDP"] == 0.0).all():
+                mapped_df["UDP"] = series_str.str.contains("UDP").astype(float)
+            if (mapped_df["ICMP"] == 0.0).all():
+                mapped_df["ICMP"] = series_str.str.contains("ICMP").astype(float)
+            if (mapped_df["HTTP"] == 0.0).all():
+                mapped_df["HTTP"] = series_str.str.contains("HTTP").astype(float)
+            if (mapped_df["HTTPS"] == 0.0).all():
+                mapped_df["HTTPS"] = (series_str.str.contains("HTTPS") | series_str.str.contains("SSL") | series_str.str.contains("TLS")).astype(float)
+            if (mapped_df["DNS"] == 0.0).all():
+                mapped_df["DNS"] = series_str.str.contains("DNS").astype(float)
+            break
+
+    # Device or IP identification candidate search
     dev_col = None
-    for candidate in ["device_id", "device", "src_ip", "source_ip", "ip", "host", "source", "client"]:
+    for candidate in ["device_id", "device", "src_ip", "source_ip", "id.orig_h", "srcip", "ip_src", "host", "source", "client", "ip"]:
         for orig_col in df.columns:
             if candidate in orig_col.lower():
                 dev_col = orig_col
@@ -82,14 +145,102 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if dev_col:
         mapped_df["device_id"] = df[dev_col].astype(str)
     else:
-        mapped_df["device_id"] = [f"custom-device-{(i % 5) + 1:02d}" for i in range(len(df))]
+        # Create deterministic pseudo device identifiers based on row clustering
+        mapped_df["device_id"] = [f"iot-node-{(i % 8) + 1:02d} (192.168.1.{(i % 8) + 101})" for i in range(len(df))]
+
+    # Ground truth label capture if present in dataset
+    label_col = None
+    for candidate in ["label", "attack_family", "attack", "category", "label_type", "class", "threat"]:
+        for orig_col in df.columns:
+            if candidate == orig_col.lower() or orig_col.lower().startswith("label"):
+                label_col = orig_col
+                break
+        if label_col:
+            break
+
+    if label_col:
+        mapped_df["ground_truth"] = df[label_col].astype(str)
 
     return mapped_df
+
+def parse_uploaded_file_to_df(contents: bytes, filename: str) -> tuple[pd.DataFrame, int, str]:
+    """
+    Universally parses uploaded binary PCAP, CSV, TSV, JSON, JSONL, Zeek logs,
+    or compressed gzip logs into a normalized DataFrame ready for 2-Stage inference.
+    Returns: (mapped_df, total_file_records, file_type_desc)
+    """
+    fn_lower = filename.lower()
+
+    # 1. Native Wireshark / Tcpdump PCAP / PCAPNG
+    if fn_lower.endswith((".pcap", ".pcapng", ".cap")) or contents[:4] in [b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x0a\x0d\x0d\x0a"]:
+        from backend.app.services.pcap_extractor import extract_flows_from_pcap
+        mapped_df = extract_flows_from_pcap(contents, filename=filename)
+        return mapped_df, len(mapped_df), "Wireshark Packet Capture (PCAP/PCAPNG)"
+
+    # 2. GZIP-compressed CSV/JSON
+    if fn_lower.endswith(".gz") or contents[:2] == b"\x1f\x8b":
+        decompressed = gzip.decompress(contents)
+        try:
+            df = pd.read_csv(io.BytesIO(decompressed))
+            mapped_df = map_arbitrary_dataframe(df)
+            return mapped_df, len(df), "GZIP Compressed CSV Archive"
+        except Exception:
+            df = pd.read_json(io.BytesIO(decompressed))
+            mapped_df = map_arbitrary_dataframe(df)
+            return mapped_df, len(df), "GZIP Compressed JSON Archive"
+
+    # 3. JSON / JSON-Lines
+    if fn_lower.endswith((".json", ".jsonl")):
+        try:
+            df = pd.read_json(io.BytesIO(contents))
+        except Exception:
+            try:
+                df = pd.read_json(io.BytesIO(contents), lines=True)
+            except Exception:
+                raw_json = json.loads(contents.decode("utf-8", errors="replace"))
+                if isinstance(raw_json, dict):
+                    # Check common container keys
+                    for key in ["data", "rows", "flows", "events", "records"]:
+                        if key in raw_json and isinstance(raw_json[key], list):
+                            raw_json = raw_json[key]
+                            break
+                df = pd.DataFrame(raw_json)
+        mapped_df = map_arbitrary_dataframe(df)
+        return mapped_df, len(df), "JSON / JSON-Lines Dataset"
+
+    # 4. Zeek / Bro Log format (e.g. conn.log, dns.log, http.log)
+    if fn_lower.endswith(".log") or b"#separator" in contents[:100] or b"#fields" in contents[:200]:
+        try:
+            text_data = contents.decode("utf-8", errors="replace")
+            lines = [l for l in text_data.splitlines() if not l.startswith("#close")]
+            header_line = next((l for l in lines if l.startswith("#fields")), None)
+            if header_line:
+                fields = header_line.replace("#fields", "").strip().split()
+                data_lines = [l.split("\t") if "\t" in l else l.split() for l in lines if not l.startswith("#")]
+                df = pd.DataFrame(data_lines, columns=fields[:len(data_lines[0])] if data_lines else None)
+                mapped_df = map_arbitrary_dataframe(df)
+                return mapped_df, len(df), "Zeek Network Security Log"
+        except Exception:
+            pass
+
+    # 5. CSV, TSV, or Delimited Plaintext Log
+    for encoding in ["utf-8", "latin1", "cp1252"]:
+        try:
+            df = pd.read_csv(io.BytesIO(contents), sep=None, engine="python", encoding=encoding)
+            mapped_df = map_arbitrary_dataframe(df)
+            return mapped_df, len(df), f"Delimited Dataset ({len(df.columns)} cols)"
+        except Exception:
+            continue
+
+    # Fallback default reader
+    df = pd.read_csv(io.BytesIO(contents), encoding="latin1")
+    mapped_df = map_arbitrary_dataframe(df)
+    return mapped_df, len(df), "CSV Dataset"
 
 @router.get("/status")
 def get_system_status():
     """
-    Returns the status of models, thresholds, and pipeline components.
+    Returns the operational status of models, thresholds, and pipeline components.
     """
     if not pipeline_instance.is_loaded:
         try:
@@ -99,11 +250,12 @@ def get_system_status():
 
     return {
         "status": "OPERATIONAL",
-        "stage1_autoencoder": "Loaded (PyTorch)",
-        "stage2_classifier": "Loaded (Random Forest)",
+        "stage1_autoencoder": "Loaded (PyTorch Autoencoder)",
+        "stage2_classifier": "Loaded (Random Forest Multi-Class)",
         "reconstruction_threshold": pipeline_instance.threshold,
         "features_count": len(FEATURE_COLUMNS),
-        "tracked_devices_count": len(pipeline_instance.risk_engine.device_history)
+        "tracked_devices_count": len(pipeline_instance.risk_engine.device_history),
+        "supported_file_formats": ["PCAP (.pcap, .pcapng, .cap)", "CSV (.csv, .tsv)", "JSON (.json, .jsonl)", "Zeek Logs (.log)", "GZIP (.csv.gz)"]
     }
 
 @router.get("/evaluation-report")
@@ -139,60 +291,103 @@ async def upload_and_analyze_dataset(
     max_rows: int = Form(500)
 ):
     """
-    Upload any Wireshark (.pcap/.pcapng) capture or CSV/JSON dataset
-    to perform batch anomaly detection and attack family triage with explainability.
+    Universal ingestion and analysis endpoint:
+    Processes Wireshark captures (.pcap, .pcapng), CSV datasets, JSON logs, or Zeek telemetry
+    through the 2-Stage ML Pipeline (Autoencoder Anomaly Gate + Supervised Attack Classifier)
+    with feature explainability and fleet risk quantification.
     """
     if not pipeline_instance.is_loaded:
         pipeline_instance.load_artifacts()
 
     try:
         contents = await file.read()
-        filename = file.filename.lower()
+        if not contents or len(contents) == 0:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty.")
 
-        # 1. Native Wireshark PCAP / PCAPNG parser
-        if filename.endswith(".pcap") or filename.endswith(".pcapng") or filename.endswith(".cap"):
-            from backend.app.services.pcap_extractor import extract_flows_from_pcap
-            mapped_df = extract_flows_from_pcap(contents, filename=file.filename)
-            total_uploaded_rows = len(mapped_df)
-        elif filename.endswith(".json"):
-            df = pd.read_json(io.BytesIO(contents))
-            total_uploaded_rows = len(df)
-            mapped_df = map_arbitrary_dataframe(df)
-        else:
-            # Default to CSV / Wireshark CSV export
-            df = pd.read_csv(io.BytesIO(contents))
-            total_uploaded_rows = len(df)
-            mapped_df = map_arbitrary_dataframe(df)
+        mapped_df, total_file_records, file_type_desc = parse_uploaded_file_to_df(contents, file.filename)
 
         if len(mapped_df) == 0:
-            raise HTTPException(status_code=400, detail="Uploaded capture or dataset contains 0 flows.")
+            raise HTTPException(status_code=400, detail="Uploaded file produced 0 valid network flow records.")
 
         if len(mapped_df) > max_rows:
             mapped_df = mapped_df.iloc[:max_rows]
 
+        # Extract features matrix and scale
+        X_raw = mapped_df[FEATURE_COLUMNS].values.astype(np.float32)
+        X_scaled = pipeline_instance.scaler.transform(X_raw)
+        
+        # Stage 1: Batch PyTorch Autoencoder Anomaly Scoring
+        tensor_vals = torch.tensor(X_scaled, dtype=torch.float32).to(pipeline_instance.device)
+        recon_errors = pipeline_instance.autoencoder.compute_reconstruction_error(tensor_vals)
+        feature_deviations = pipeline_instance.autoencoder.get_feature_deviations(tensor_vals)
+
+        # Stage 2: Supervised Multi-class Attack Attribution
+        class_probs = pipeline_instance.classifier.predict_proba(X_scaled)
+        pred_class_indices = np.argmax(class_probs, axis=1)
+        class_names = pipeline_instance.label_encoder.classes_
+        pred_classes = class_names[pred_class_indices]
+        attack_confidences = np.max(class_probs, axis=1)
+
+        threshold = pipeline_instance.threshold
+        is_anomalies = recon_errors >= threshold
+        normalized_anomaly_scores = np.clip(recon_errors / (threshold * 2.5), 0.0, 1.0)
+
+        device_ids = mapped_df["device_id"].astype(str).tolist()
+        has_ground_truth = "ground_truth" in mapped_df.columns
+        ground_truths = mapped_df["ground_truth"].tolist() if has_ground_truth else []
+
         results = []
-        anomaly_count = 0
+        anomaly_count = int(np.sum(is_anomalies))
         attack_distribution = {}
+        severity_distribution = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
         high_risk_devices = set()
         device_summary = {}
+        top_deviating_features_fleet = {}
 
-        for idx, row in mapped_df.iterrows():
-            row_dict = row.to_dict()
-            dev_id = str(row_dict.get("device_id", f"node-{(idx % 6) + 1}"))
-            pred = pipeline_instance.predict_flow(row_dict, device_id=dev_id)
-            
-            is_anom = pred["is_anomaly"]
-            severity = pred["risk_assessment"]["severity"]
-            risk_val = pred["risk_assessment"]["risk_score"]
-            cls = pred["classification"]
-            top_dev = pred["top_deviating_features"][0] if pred["top_deviating_features"] else None
+        from ml.explainability import extract_top_deviations
 
-            if is_anom:
-                anomaly_count += 1
-                if severity in ["CRITICAL", "HIGH"]:
-                    high_risk_devices.add(dev_id)
+        for idx in range(len(mapped_df)):
+            dev_id = device_ids[idx]
+            is_anom = bool(is_anomalies[idx])
+            raw_recon = float(recon_errors[idx])
+            norm_anom = float(normalized_anomaly_scores[idx])
+            pred_cls = str(pred_classes[idx])
+            conf = float(attack_confidences[idx])
 
-            attack_distribution[cls] = attack_distribution.get(cls, 0) + 1
+            if is_anom and pred_cls == "Benign":
+                final_status = "Suspected Novel Anomaly"
+                atk_prob = 0.65
+            elif is_anom:
+                final_status = pred_cls
+                atk_prob = conf
+            else:
+                final_status = "Benign"
+                atk_prob = 0.05
+
+            # Calculate Risk Assessment
+            risk_result = pipeline_instance.risk_engine.calculate_risk(
+                device_id=dev_id,
+                anomaly_score=norm_anom,
+                attack_probability=atk_prob
+            )
+
+            severity = risk_result["severity"]
+            risk_val = risk_result["risk_score"]
+
+            severity_distribution[severity] = severity_distribution.get(severity, 0) + 1
+
+            if is_anom and severity in ["CRITICAL", "HIGH"]:
+                high_risk_devices.add(dev_id)
+
+            attack_distribution[final_status] = attack_distribution.get(final_status, 0) + 1
+
+            # Extract top deviations for flow explainability
+            top_devs = extract_top_deviations(feature_deviations[idx], X_raw[idx], top_k=2)
+            top_dev = top_devs[0] if top_devs else None
+
+            if top_dev:
+                feat_name = top_dev["feature"]
+                top_deviating_features_fleet[feat_name] = top_deviating_features_fleet.get(feat_name, 0) + 1
 
             # Aggregate Device Rollup
             if dev_id not in device_summary:
@@ -213,25 +408,30 @@ async def upload_and_analyze_dataset(
                 dev_rec["anomaly_flows"] += 1
             dev_rec["risk_scores"].append(risk_val)
             dev_rec["max_risk_score"] = max(dev_rec["max_risk_score"], risk_val)
-            dev_rec["attacks_seen"][cls] = dev_rec["attacks_seen"].get(cls, 0) + 1
+            dev_rec["attacks_seen"][final_status] = dev_rec["attacks_seen"].get(final_status, 0) + 1
             dev_rec["severities"][severity] = dev_rec["severities"].get(severity, 0) + 1
+            
             if top_dev and len(dev_rec["top_deviating_signals"]) < 3:
-                label_val = f"{top_dev['label']} ({round(top_dev['observed_value'], 2)})"
+                label_val = f"{top_dev['label']} ({round(top_dev['observed_value'], 1)})"
                 if label_val not in dev_rec["top_deviating_signals"]:
                     dev_rec["top_deviating_signals"].append(label_val)
 
-            results.append({
+            row_record = {
                 "row_index": idx + 1,
                 "device_id": dev_id,
                 "is_anomaly": is_anom,
-                "classification": cls,
-                "reconstruction_error": pred["reconstruction_error"],
-                "anomaly_score": pred["anomaly_score"],
-                "attack_confidence": pred["attack_confidence"],
+                "classification": final_status,
+                "reconstruction_error": round(raw_recon, 6),
+                "anomaly_score": round(norm_anom, 4),
+                "attack_confidence": round(conf, 4),
                 "risk_score": risk_val,
                 "severity": severity,
                 "top_deviation": top_dev
-            })
+            }
+            if has_ground_truth:
+                row_record["ground_truth"] = ground_truths[idx]
+
+            results.append(row_record)
 
         # Format device summaries
         formatted_devices = []
@@ -262,44 +462,46 @@ async def upload_and_analyze_dataset(
 
         formatted_devices.sort(key=lambda x: x["max_risk_score"], reverse=True)
 
+        # Sort fleet signals by frequency
+        sorted_fleet_signals = sorted(top_deviating_features_fleet.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_signals_summary = [{"feature": f, "anomalous_occurrences": count} for f, count in sorted_fleet_signals]
+
         return {
             "filename": file.filename,
+            "file_type": file_type_desc,
             "total_records_analyzed": len(results),
-            "total_file_records": total_uploaded_rows,
+            "total_file_records": total_file_records,
             "anomalies_detected": anomaly_count,
-            "anomaly_rate_percentage": round((anomaly_count / len(results)) * 100, 2),
+            "anomaly_rate_percentage": round((anomaly_count / len(results)) * 100, 2) if len(results) > 0 else 0.0,
             "attack_family_breakdown": attack_distribution,
+            "severity_breakdown": severity_distribution,
             "high_risk_devices_affected": list(high_risk_devices),
             "total_devices_scanned": len(formatted_devices),
             "device_summaries": formatted_devices,
+            "top_fleet_signals": top_signals_summary,
             "reconstruction_threshold_used": pipeline_instance.threshold,
             "rows": results
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process Wireshark/dataset file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process file '{file.filename}': {str(e)}")
 
 @router.post("/load-custom-stream")
 async def load_custom_dataset_into_stream(file: UploadFile = File(...)):
     """
-    Loads an uploaded Wireshark (.pcap/.pcapng) or CSV dataset directly into the live simulator replay stream!
+    Loads an uploaded Wireshark (.pcap/.pcapng), CSV, TSV, or JSON dataset directly into the live simulator replay stream!
     """
     try:
         contents = await file.read()
-        filename = file.filename.lower()
+        if not contents or len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-        if filename.endswith(".pcap") or filename.endswith(".pcapng") or filename.endswith(".cap"):
-            from backend.app.services.pcap_extractor import extract_flows_from_pcap
-            mapped_df = extract_flows_from_pcap(contents, filename=file.filename)
-        elif filename.endswith(".json"):
-            df = pd.read_json(io.BytesIO(contents))
-            mapped_df = map_arbitrary_dataframe(df)
-        else:
-            df = pd.read_csv(io.BytesIO(contents))
-            mapped_df = map_arbitrary_dataframe(df)
+        mapped_df, total_rows, file_desc = parse_uploaded_file_to_df(contents, file.filename)
 
         if len(mapped_df) == 0:
-            raise HTTPException(status_code=400, detail="Uploaded file contains 0 flows.")
+            raise HTTPException(status_code=400, detail="Uploaded file contains 0 valid flows.")
 
         traffic_simulator.df = mapped_df
         traffic_simulator.current_idx = 0
@@ -307,8 +509,11 @@ async def load_custom_dataset_into_stream(file: UploadFile = File(...)):
 
         return {
             "status": "SUCCESS",
-            "message": f"Loaded {len(mapped_df)} flows from Wireshark capture {file.filename} into live WebSocket stream!",
-            "total_flows": len(mapped_df)
+            "message": f"Successfully loaded {len(mapped_df)} flows from '{file.filename}' ({file_desc}) into live WebSocket stream!",
+            "total_flows": len(mapped_df),
+            "file_type": file_desc
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stream Wireshark capture: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to stream file '{file.filename}': {str(e)}")

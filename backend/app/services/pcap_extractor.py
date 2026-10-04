@@ -113,15 +113,19 @@ def extract_flows_from_pcap(pcap_bytes: bytes, filename: str = "capture.pcap") -
         f["directions"].append(direction)
         f["header_lengths"].append(hdr_len)
 
-        if is_tcp and flags:
-            if flags.S: f["flags"]["syn"] += 1
-            if flags.A: f["flags"]["ack"] += 1
-            if flags.R: f["flags"]["rst"] += 1
-            if flags.F: f["flags"]["fin"] += 1
-            if flags.P: f["flags"]["psh"] += 1
-            if flags.U: f["flags"]["urg"] += 1
-            if flags.E: f["flags"]["ece"] += 1
-            if flags.C: f["flags"]["cwr"] += 1
+        if is_tcp and flags is not None:
+            try:
+                flag_val = int(flags)
+                if flag_val & 0x02: f["flags"]["syn"] += 1
+                if flag_val & 0x10: f["flags"]["ack"] += 1
+                if flag_val & 0x04: f["flags"]["rst"] += 1
+                if flag_val & 0x01: f["flags"]["fin"] += 1
+                if flag_val & 0x08: f["flags"]["psh"] += 1
+                if flag_val & 0x20: f["flags"]["urg"] += 1
+                if flag_val & 0x40: f["flags"]["ece"] += 1
+                if flag_val & 0x80: f["flags"]["cwr"] += 1
+            except Exception:
+                pass
 
         # Application-level heuristic detection
         ports = {src_port, dst_port}

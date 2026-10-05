@@ -124,20 +124,20 @@ def map_arbitrary_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     return mapped_df
 
-def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: Optional[int] = None) -> tuple[pd.DataFrame, int, str]:
+def parse_uploaded_file_to_df(contents: bytes, filename: str, max_rows: Optional[int] = 5000) -> tuple[pd.DataFrame, int, str]:
     """
     Universally parses uploaded binary PCAP, CSV, TSV, JSON, JSONL, Zeek logs,
     or compressed gzip logs into a normalized DataFrame ready for 2-Stage inference.
-    Parses the full file when max_rows is None or 0.
+    Caps parsing to max_rows (default 5000 records) for fast sub-second analysis.
     Returns: (mapped_df, total_file_records, file_type_desc)
     """
     fn_lower = filename.lower()
-    read_nrows = max_rows if (max_rows is not None and max_rows > 0) else None
+    read_nrows = min(int(max_rows), 5000) if (max_rows is not None and max_rows > 0) else 5000
 
     # 1. Native Wireshark / Tcpdump PCAP / PCAPNG
     if fn_lower.endswith((".pcap", ".pcapng", ".cap")) or contents[:4] in [b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x0a\x0d\x0d\x0a"]:
         from backend.app.services.pcap_extractor import extract_flows_from_pcap
-        mapped_df = extract_flows_from_pcap(contents, filename=filename)
+        mapped_df = extract_flows_from_pcap(contents, filename=filename, max_flows=read_nrows)
         return mapped_df, len(mapped_df), "Wireshark Packet Capture (PCAP/PCAPNG)"
 
     # 2. GZIP-compressed CSV/JSON
@@ -254,7 +254,7 @@ def predict_single_flow(request: FlowInferenceRequest):
 @router.post("/upload-and-analyze")
 async def upload_and_analyze_dataset(
     file: UploadFile = File(...),
-    max_rows: int = Form(0),
+    max_rows: int = Form(5000),
     page: int = Form(1),
     page_size: int = Form(100)
 ):
@@ -263,7 +263,7 @@ async def upload_and_analyze_dataset(
     Processes Wireshark captures (.pcap, .pcapng), CSV datasets, JSON logs, or Zeek telemetry
     through the 2-Stage ML Pipeline (Autoencoder Anomaly Gate + Supervised Attack Classifier)
     with feature explainability, fleet risk quantification, and server-side pagination support.
-    Analyzes the entire uploaded file automatically.
+    Scans up to 5,000 records for fast, responsive processing.
     """
     import gc
     import math
@@ -272,8 +272,8 @@ async def upload_and_analyze_dataset(
         pipeline_instance.load_artifacts()
 
     try:
-        # If max_rows is 0 or negative, analyze entire dataset without row limit
-        safe_max_rows = int(max_rows) if int(max_rows) > 0 else None
+        # Enforce max 5,000 records for fast cloud inference
+        safe_max_rows = min(int(max_rows), 5000) if int(max_rows) > 0 else 5000
 
         contents = await file.read()
         if not contents or len(contents) == 0:

@@ -173,7 +173,7 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("max_rows", "0");
+      formData.append("max_rows", "5000");
 
       const res = await fetch(`${apiBase}/upload-and-analyze`, {
         method: "POST",
@@ -435,7 +435,7 @@ export default function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                       <Layers size={14} color="#38bdf8" />
-                      <span>Scan Mode: <strong>Full Dataset Deep Scan (Uncapped)</strong></span>
+                      <span>Scan Mode: <strong>Fast Deep Scan (Max 5,000 flows)</strong></span>
                     </div>
 
                     <button

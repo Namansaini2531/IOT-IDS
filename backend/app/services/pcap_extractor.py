@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 
 from ml.config import FEATURE_COLUMNS
 
-def extract_flows_from_pcap(pcap_bytes: bytes, filename: str = "capture.pcap") -> pd.DataFrame:
+def extract_flows_from_pcap(pcap_bytes: bytes, filename: str = "capture.pcap", max_flows: int = 5000) -> pd.DataFrame:
     """
     Parses a raw Wireshark .pcap / .pcapng file, aggregates raw packets
     into bidirectional 5-tuple network flows, and computes the 46 CICIoT features.
@@ -229,4 +229,6 @@ def extract_flows_from_pcap(pcap_bytes: bytes, filename: str = "capture.pcap") -
         flow_rows.append(row)
 
     df_flows = pd.DataFrame(flow_rows)
+    if max_flows and len(df_flows) > max_flows:
+        df_flows = df_flows.iloc[:max_flows]
     return df_flows

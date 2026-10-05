@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "IoT-IDS AI Defense Monitor"
+    PROJECT_NAME: str = "CortexIO AI Defense Monitor"
     API_V1_STR: str = "/api/v1"
     CORS_ORIGINS: list[str] = ["*"]
     

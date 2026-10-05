@@ -242,7 +242,7 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#ffffff' }}>
-                IoT Sentinel
+                CortexIO
               </span>
               <span style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.07)', color: '#94a3b8', border: '1px solid rgba(255, 255, 255, 0.1)', fontWeight: 700, letterSpacing: '0.04em' }}>
                 v2.4

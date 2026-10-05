@@ -36,7 +36,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Sun,
+  Moon
 } from 'lucide-react';
 import {
   LineChart,
@@ -95,6 +97,16 @@ export default function App() {
   const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('ALL');
   const [tablePage, setTablePage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [theme, setTheme] = useState(() => localStorage.getItem('cortexio_theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('cortexio_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // Simulator Form State (Lab Tab)
   const [simForm, setSimForm] = useState({
@@ -241,10 +253,10 @@ export default function App() {
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#ffffff' }}>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
                 CortexIO
               </span>
-              <span style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.07)', color: '#94a3b8', border: '1px solid rgba(255, 255, 255, 0.1)', fontWeight: 700, letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', fontWeight: 700, letterSpacing: '0.04em' }}>
                 v2.4
               </span>
             </div>
@@ -254,16 +266,44 @@ export default function App() {
           </div>
         </div>
 
-
-
-        {/* Right: Quick Action */}
+        {/* Right: Quick Action & Theme Switching Pill */}
         <div className="nav-actions-group">
+          {/* Interactive Dual-Mode Switching Button */}
+          <div 
+            className="theme-switcher-pill"
+            onClick={toggleTheme}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleTheme(); }}
+            title={`Current: ${theme === 'dark' ? 'Dark' : 'Light'} Mode (Click to switch)`}
+          >
+            <div className={`theme-switcher-thumb ${theme}`} />
+            <button
+              type="button"
+              className={`theme-switcher-btn ${theme === 'dark' ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); if (theme !== 'dark') toggleTheme(); }}
+              aria-label="Dark Mode"
+            >
+              <Moon size={13} color={theme === 'dark' ? '#38bdf8' : 'currentColor'} className="theme-switcher-icon" />
+              <span>Dark</span>
+            </button>
+            <button
+              type="button"
+              className={`theme-switcher-btn ${theme === 'light' ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); if (theme !== 'light') toggleTheme(); }}
+              aria-label="Light Mode"
+            >
+              <Sun size={13} color={theme === 'light' ? '#f59e0b' : 'currentColor'} className="theme-switcher-icon" />
+              <span>Light</span>
+            </button>
+          </div>
+
           {fileAnalysisResult ? (
             <button
               onClick={handleDownloadReport}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', borderRadius: '7px', border: '1px solid rgba(255, 255, 255, 0.12)',
-                background: '#14141a', color: '#f4f4f6', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.6)'
+                display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', borderRadius: '7px', border: '1px solid var(--border-color)',
+                background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', boxShadow: 'var(--shadow-black-sm)'
               }}
             >
               <Download size={13} color="#38bdf8" /> Export JSON
@@ -275,8 +315,8 @@ export default function App() {
                 fileInputRef.current?.click();
               }}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', borderRadius: '7px', border: '1px solid rgba(56, 189, 248, 0.3)',
-                background: 'linear-gradient(135deg, #191b24, #0e0f14)', color: '#38bdf8', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.7)'
+                display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', borderRadius: '7px', border: '1px solid rgba(56, 189, 248, 0.4)',
+                background: theme === 'dark' ? 'linear-gradient(135deg, #191b24, #0e0f14)' : '#f0f9ff', color: theme === 'dark' ? '#38bdf8' : '#0284c7', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', boxShadow: 'var(--shadow-black-sm)'
               }}
             >
               <PlusCircle size={13} /> Select File
@@ -321,20 +361,7 @@ export default function App() {
               {/* Dropzone Area */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  border: '1.5px dashed rgba(255, 255, 255, 0.14)',
-                  borderRadius: '12px',
-                  padding: '2.25rem 1.5rem',
-                  textAlign: 'center',
-                  background: 'rgba(8, 8, 12, 0.75)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  boxShadow: 'inset 0 2px 12px rgba(0, 0, 0, 0.8)'
-                }}
+                className="dropzone-container"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
@@ -354,11 +381,11 @@ export default function App() {
                     }
                   }}
                 />
-                <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.85rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '0.85rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
                   <UploadCloud size={28} />
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                     {selectedFile ? `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "Select or drag & drop Wireshark / IoT Log file"}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -378,20 +405,20 @@ export default function App() {
                   onClick={handleUploadAndAnalyze}
                   disabled={!selectedFile || isAnalyzingFile}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.4rem', borderRadius: '8px', border: selectedFile ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-                    background: selectedFile ? 'linear-gradient(135deg, #1c1e28, #101117)' : 'rgba(255, 255, 255, 0.04)',
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.4rem', borderRadius: '8px', border: selectedFile ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid var(--border-color)',
+                    background: selectedFile ? (theme === 'dark' ? 'linear-gradient(135deg, #1c1e28, #101117)' : 'linear-gradient(135deg, #0284c7, #0369a1)') : 'var(--border-subtle)',
                     color: selectedFile ? '#ffffff' : 'var(--text-muted)',
                     fontWeight: 700, fontSize: '0.88rem', cursor: selectedFile ? 'pointer' : 'not-allowed',
-                    boxShadow: selectedFile ? '0 8px 20px rgba(0, 0, 0, 0.9), 0 0 12px rgba(56, 189, 248, 0.15)' : 'none'
+                    boxShadow: selectedFile ? '0 8px 20px rgba(0, 0, 0, 0.3)' : 'none'
                   }}
                 >
-                  {isAnalyzingFile ? <RefreshCw className="pulse-active" size={15} /> : <Search size={15} color="#38bdf8" />}
+                  {isAnalyzingFile ? <RefreshCw className="pulse-active" size={15} /> : <Search size={15} color={selectedFile && theme === 'light' ? '#ffffff' : '#38bdf8'} />}
                   {isAnalyzingFile ? "Analyzing Traffic with AI..." : "Run IoT Anomaly Audit"}
                 </button>
               </div>
 
               {uploadToast && (
-                <div style={{ padding: '0.65rem 0.9rem', borderRadius: '7px', background: uploadToast.startsWith('Error') ? 'rgba(244, 63, 94, 0.1)' : 'rgba(16, 185, 129, 0.1)', border: `1px solid ${uploadToast.startsWith('Error') ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`, color: uploadToast.startsWith('Error') ? '#fb7185' : '#34d399', fontSize: '0.82rem', fontWeight: 600 }}>
+                <div style={{ padding: '0.65rem 0.9rem', borderRadius: '7px', background: uploadToast.startsWith('Error') ? 'rgba(244, 63, 94, 0.1)' : 'rgba(16, 185, 129, 0.1)', border: `1px solid ${uploadToast.startsWith('Error') ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`, color: uploadToast.startsWith('Error') ? '#fb7185' : '#10b981', fontSize: '0.82rem', fontWeight: 600 }}>
                   {uploadToast}
                 </div>
               )}
@@ -405,7 +432,7 @@ export default function App() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
                   <div className="glass-panel" style={{ padding: '1.25rem' }}>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Total Flow Records Scanned</div>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f8fafc' }}>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                       {fileAnalysisResult.total_records_analyzed.toLocaleString()}
                     </div>
                   </div>
@@ -437,7 +464,7 @@ export default function App() {
                   <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                       <div>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <Radio size={17} color="#38bdf8" />
                           Discovered IoT Devices — Anomaly & Risk Breakdown
                         </h3>
@@ -449,7 +476,7 @@ export default function App() {
                       {selectedDeviceFilter !== 'ALL' && (
                         <button
                           onClick={() => setSelectedDeviceFilter('ALL')}
-                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#181820', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}
+                          style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'var(--bg-elevated)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '4px', cursor: 'pointer' }}
                         >
                           Clear Filter (Showing {selectedDeviceFilter})
                         </button>
@@ -464,18 +491,18 @@ export default function App() {
                           style={{
                             padding: '1.1rem',
                             borderRadius: '10px',
-                            background: selectedDeviceFilter === dev.device_id ? 'rgba(25, 28, 38, 0.95)' : 'rgba(10, 10, 14, 0.85)',
-                            border: selectedDeviceFilter === dev.device_id ? '1.5px solid #38bdf8' : `1px solid ${dev.overall_health === 'CRITICAL' ? 'rgba(244, 63, 94, 0.3)' : dev.overall_health === 'HIGH_RISK' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255, 255, 255, 0.07)'}`,
+                            background: selectedDeviceFilter === dev.device_id ? (theme === 'dark' ? 'rgba(25, 28, 38, 0.95)' : '#e0f2fe') : 'var(--bg-elevated)',
+                            border: selectedDeviceFilter === dev.device_id ? '1.5px solid #38bdf8' : `1px solid ${dev.overall_health === 'CRITICAL' ? 'rgba(244, 63, 94, 0.35)' : dev.overall_health === 'HIGH_RISK' ? 'rgba(245, 158, 11, 0.35)' : 'var(--border-color)'}`,
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '0.6rem',
-                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.75)'
+                            boxShadow: 'var(--shadow-black-sm)'
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#f8fafc' }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
                               {dev.device_id}
                             </span>
                             <span
@@ -529,7 +556,7 @@ export default function App() {
                   <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div>
-                        <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                           <Activity size={16} color="#38bdf8" />
                           IoT Fleet Anomaly & Threat Timeline
                         </h4>
@@ -567,23 +594,23 @@ export default function App() {
                               <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
                             </linearGradient>
                           </defs>
-                          <XAxis dataKey="index" stroke="rgba(255,255,255,0.2)" fontSize={11} tickLine={false} label={{ value: 'Network Flow #', position: 'insideBottom', offset: -2, fill: 'rgba(255,255,255,0.3)', fontSize: 10 }} />
-                          <YAxis domain={[0, 100]} stroke="rgba(255,255,255,0.2)" fontSize={11} tickLine={false} unit="%" />
+                          <XAxis dataKey="index" stroke="var(--text-muted)" fontSize={11} tickLine={false} label={{ value: 'Network Flow #', position: 'insideBottom', offset: -2, fill: 'var(--text-muted)', fontSize: 10 }} />
+                          <YAxis domain={[0, 100]} stroke="var(--text-muted)" fontSize={11} tickLine={false} unit="%" />
                           <ReferenceLine y={40} stroke="rgba(244, 63, 94, 0.45)" strokeDasharray="3 3" label={{ value: 'Alert Line (40%)', fill: '#fb7185', fontSize: 10, position: 'right' }} />
                           <Tooltip
                             content={({ active, payload }) => {
                               if (!active || !payload || !payload.length) return null;
                               const d = payload[0].payload;
                               return (
-                                <div style={{ background: '#09090d', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.74rem', boxShadow: '0 8px 24px rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.3rem' }}>
-                                    <span style={{ fontWeight: 700, color: '#f8fafc' }}>Flow #{d.index}</span>
+                                <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.74rem', boxShadow: 'var(--shadow-black-md)', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.3rem' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Flow #{d.index}</span>
                                     <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, background: d.isAnomaly ? 'rgba(244, 63, 94, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: d.isAnomaly ? '#fb7185' : '#34d399' }}>
                                       {d.isAnomaly ? 'ANOMALY' : 'NORMAL'}
                                     </span>
                                   </div>
-                                  <div style={{ color: 'var(--text-secondary)' }}>Device: <strong style={{ color: '#fff' }}>{d.deviceId}</strong></div>
-                                  <div style={{ color: 'var(--text-secondary)' }}>Threat Classification: <strong style={{ color: ATTACK_COLORS[d.threat] || '#fff' }}>{d.threat}</strong></div>
+                                  <div style={{ color: 'var(--text-secondary)' }}>Device: <strong style={{ color: 'var(--text-primary)' }}>{d.deviceId}</strong></div>
+                                  <div style={{ color: 'var(--text-secondary)' }}>Threat Classification: <strong style={{ color: ATTACK_COLORS[d.threat] || 'var(--text-primary)' }}>{d.threat}</strong></div>
                                   <div style={{ color: 'var(--text-secondary)' }}>Anomaly Deviation Score: <strong style={{ color: d.isAnomaly ? '#fb7185' : '#38bdf8' }}>{d.anomalyScorePct}%</strong></div>
                                   <div style={{ color: 'var(--text-secondary)' }}>Trigger Signal: <strong style={{ color: '#fbbf24' }}>{d.topDev}</strong></div>
                                 </div>
@@ -598,7 +625,7 @@ export default function App() {
 
                   {/* Attack Breakdown Distribution */}
                   <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc' }}>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                       Detected Attack Family Classifications
                     </h4>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
@@ -608,18 +635,18 @@ export default function App() {
                           style={{
                             padding: '0.45rem 0.8rem',
                             borderRadius: '8px',
-                            background: 'rgba(10, 10, 14, 0.9)',
+                            background: 'var(--bg-elevated)',
                             border: `1px solid ${ATTACK_COLORS[atkName] || '#38bdf8'}35`,
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.5rem',
                             fontSize: '0.78rem',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.6)'
+                            boxShadow: 'var(--shadow-black-sm)'
                           }}
                         >
-                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: ATTACK_COLORS[atkName] || '#fff' }}></span>
-                          <span style={{ fontWeight: 600, color: ATTACK_COLORS[atkName] || '#fff' }}>{atkName}:</span>
-                          <strong style={{ color: '#fff' }}>{count} flows</strong>
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: ATTACK_COLORS[atkName] || 'var(--text-primary)' }}></span>
+                          <span style={{ fontWeight: 600, color: ATTACK_COLORS[atkName] || 'var(--text-primary)' }}>{atkName}:</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>{count} flows</strong>
                         </div>
                       ))}
                     </div>
@@ -631,7 +658,7 @@ export default function App() {
                 <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                      <h3 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#f8fafc' }}>
+                      <h3 style={{ fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         Diagnostic Flow Records & Feature Deviations
                       </h3>
                       <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
@@ -645,7 +672,7 @@ export default function App() {
                         placeholder="Search IP, device, attack..."
                         value={analysisSearch}
                         onChange={(e) => setAnalysisSearch(e.target.value)}
-                        style={{ padding: '0.4rem 0.75rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.8rem', minWidth: '180px' }}
+                        style={{ padding: '0.4rem 0.75rem', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', fontSize: '0.8rem', minWidth: '180px' }}
                       />
 
                       <select
@@ -694,22 +721,22 @@ export default function App() {
                             <tbody>
                               {paginatedRows.length > 0 ? (
                                 paginatedRows.map((row) => (
-                                  <tr key={row.row_index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', background: row.is_anomaly ? 'rgba(244, 63, 94, 0.03)' : 'transparent' }}>
+                                  <tr key={row.row_index} style={{ borderBottom: '1px solid var(--border-subtle)', background: row.is_anomaly ? 'rgba(244, 63, 94, 0.05)' : 'transparent' }}>
                                     <td style={{ padding: '0.65rem', color: 'var(--text-muted)' }}>{row.row_index}</td>
-                                    <td style={{ padding: '0.65rem', fontWeight: 600, color: '#f8fafc' }}>{row.device_id}</td>
+                                    <td style={{ padding: '0.65rem', fontWeight: 600, color: 'var(--text-primary)' }}>{row.device_id}</td>
                                     <td style={{ padding: '0.65rem' }}>
                                       <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: row.is_anomaly ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: row.is_anomaly ? '#fb7185' : '#34d399', border: `1px solid ${row.is_anomaly ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}` }}>
                                         {row.is_anomaly ? "ANOMALY" : "NORMAL"}
                                       </span>
                                     </td>
-                                    <td style={{ padding: '0.65rem', fontWeight: 700, color: ATTACK_COLORS[row.classification] || '#fff' }}>
+                                    <td style={{ padding: '0.65rem', fontWeight: 700, color: ATTACK_COLORS[row.classification] || 'var(--text-primary)' }}>
                                       {row.classification}
                                     </td>
                                     <td style={{ padding: '0.65rem', fontFamily: 'var(--font-mono)' }}>
                                       {row.reconstruction_error.toFixed(4)}
                                     </td>
                                     <td style={{ padding: '0.65rem' }}>
-                                      <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600, background: row.severity === 'CRITICAL' ? 'rgba(244, 63, 94, 0.15)' : row.severity === 'HIGH' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.12)', color: row.severity === 'CRITICAL' ? '#fb7185' : row.severity === 'HIGH' ? '#fbbf24' : '#34d399', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                                      <span style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600, background: row.severity === 'CRITICAL' ? 'rgba(244, 63, 94, 0.15)' : row.severity === 'HIGH' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.12)', color: row.severity === 'CRITICAL' ? '#fb7185' : row.severity === 'HIGH' ? '#fbbf24' : '#34d399', border: '1px solid var(--border-color)' }}>
                                         {(row.risk_score * 100).toFixed(0)}% [{row.severity}]
                                       </span>
                                     </td>
@@ -730,7 +757,7 @@ export default function App() {
                         </div>
 
                         {/* Pagination Bar */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)' }}>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <span>
                               Showing <strong>{filteredRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1}</strong> - <strong>{Math.min(safePage * pageSize, filteredRows.length)}</strong> of <strong>{filteredRows.length.toLocaleString()}</strong> flows
@@ -743,7 +770,7 @@ export default function App() {
                                   setPageSize(Number(e.target.value));
                                   setTablePage(1);
                                 }}
-                                style={{ padding: '0.2rem 0.4rem', background: '#09090d', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#fff', borderRadius: '4px', fontSize: '0.74rem' }}
+                                style={{ padding: '0.2rem 0.4rem', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '4px', fontSize: '0.74rem' }}
                               >
                                 <option value={50}>50</option>
                                 <option value={100}>100</option>
@@ -757,7 +784,7 @@ export default function App() {
                               onClick={() => setTablePage(1)}
                               disabled={safePage <= 1}
                               title="First Page"
-                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage <= 1 ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage <= 1 ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage <= 1 ? 'transparent' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
                             >
                               <ChevronsLeft size={14} />
                             </button>
@@ -765,12 +792,12 @@ export default function App() {
                               onClick={() => setTablePage(p => Math.max(1, p - 1))}
                               disabled={safePage <= 1}
                               title="Previous Page"
-                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage <= 1 ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage <= 1 ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage <= 1 ? 'transparent' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: safePage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
                             >
                               <ChevronLeft size={14} />
                             </button>
 
-                            <span style={{ fontSize: '0.76rem', color: '#f4f4f6', padding: '0 0.5rem', fontWeight: 600 }}>
+                            <span style={{ fontSize: '0.76rem', color: 'var(--text-primary)', padding: '0 0.5rem', fontWeight: 600 }}>
                               Page {safePage} of {totalPages}
                             </span>
 
@@ -778,7 +805,7 @@ export default function App() {
                               onClick={() => setTablePage(p => Math.min(totalPages, p + 1))}
                               disabled={safePage >= totalPages}
                               title="Next Page"
-                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage >= totalPages ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage >= totalPages ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage >= totalPages ? 'transparent' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text-primary)', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
                             >
                               <ChevronRight size={14} />
                             </button>
@@ -786,7 +813,7 @@ export default function App() {
                               onClick={() => setTablePage(totalPages)}
                               disabled={safePage >= totalPages}
                               title="Last Page"
-                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage >= totalPages ? 'transparent' : 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: safePage >= totalPages ? 'rgba(255, 255, 255, 0.2)' : '#f4f4f6', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                              style={{ padding: '0.3rem 0.5rem', borderRadius: '5px', background: safePage >= totalPages ? 'transparent' : 'var(--bg-elevated)', border: '1px solid var(--border-color)', color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text-primary)', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
                             >
                               <ChevronsRight size={14} />
                             </button>
@@ -801,10 +828,10 @@ export default function App() {
             ) : (
               /* Empty State */
               <div className="glass-panel" style={{ padding: '3.5rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '1.25rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '1.25rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
                   <Shield size={40} />
                 </div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                   Ready to Ingest IoT Device Logs & Captures
                 </h3>
                 <p style={{ maxWidth: '520px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>

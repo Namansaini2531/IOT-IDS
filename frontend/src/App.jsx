@@ -336,7 +336,7 @@ export default function App() {
             <div className="glass-panel" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <FileSpreadsheet size={19} color="#38bdf8" />
                     IoT File Ingestion & Device Anomaly Engine
                   </h2>
@@ -349,8 +349,8 @@ export default function App() {
                   <button
                     onClick={handleDownloadReport}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', borderRadius: '7px', border: '1px solid rgba(255, 255, 255, 0.12)',
-                      background: '#14141a', color: '#f4f4f6', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.6)'
+                      display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', borderRadius: '7px', border: '1px solid var(--border-color)',
+                      background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: 'var(--shadow-black-sm)'
                     }}
                   >
                     <Download size={14} color="#38bdf8" /> Export Audit JSON
@@ -425,7 +425,7 @@ export default function App() {
             </div>
 
             {/* Audit Results Section */}
-            {fileAnalysisResult ? (
+            {fileAnalysisResult && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 
                 {/* 1. Fleet Executive Overview KPIs */}
@@ -513,7 +513,7 @@ export default function App() {
                                 fontWeight: 700,
                                 background: dev.overall_health === 'CRITICAL' ? 'rgba(244, 63, 94, 0.15)' : dev.overall_health === 'HIGH_RISK' ? 'rgba(245, 158, 11, 0.15)' : dev.overall_health === 'SUSPICIOUS' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(16, 185, 129, 0.15)',
                                 color: dev.overall_health === 'CRITICAL' ? '#fb7185' : dev.overall_health === 'HIGH_RISK' ? '#fbbf24' : dev.overall_health === 'SUSPICIOUS' ? '#38bdf8' : '#34d399',
-                                border: `1px solid ${dev.overall_health === 'CRITICAL' ? 'rgba(244, 63, 94, 0.3)' : dev.overall_health === 'HIGH_RISK' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`
+                                border: `1px solid ${dev.overall_health === 'CRITICAL' ? 'rgba(244, 63, 94, 0.3)' : dev.overall_health === 'HIGH_RISK' ? 'rgba(245, 158, 11, 0.3)' : 'var(--border-color)'}`
                               }}
                             >
                               {dev.overall_health.replace('_', ' ')}
@@ -528,18 +528,18 @@ export default function App() {
                                 {dev.max_risk_score}%
                               </strong>
                             </div>
-                            <div style={{ height: '5px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ height: '5px', background: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
                               <div style={{ width: `${Math.min(100, dev.max_risk_score)}%`, height: '100%', background: dev.max_risk_score >= 70 ? '#f43f5e' : dev.max_risk_score >= 40 ? '#f59e0b' : '#10b981' }}></div>
                             </div>
                           </div>
 
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
                             <span>Anomalies: <strong>{dev.anomaly_flows}/{dev.total_flows} ({dev.anomaly_rate}%)</strong></span>
-                            <span>Attribution: <strong style={{ color: ATTACK_COLORS[dev.primary_attack] || '#fff' }}>{dev.primary_attack}</strong></span>
+                            <span>Attribution: <strong style={{ color: ATTACK_COLORS[dev.primary_attack] || 'var(--text-primary)' }}>{dev.primary_attack}</strong></span>
                           </div>
 
                           {dev.top_signals && dev.top_signals.length > 0 && (
-                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', background: '#07070a', padding: '0.3rem 0.45rem', borderRadius: '4px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', background: 'var(--bg-input)', padding: '0.3rem 0.45rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
                               Trigger: {dev.top_signals.join(", ")}
                             </div>
                           )}
@@ -678,7 +678,7 @@ export default function App() {
                       <select
                         value={analysisFilter}
                         onChange={(e) => setAnalysisFilter(e.target.value)}
-                        style={{ padding: '0.4rem 0.75rem', background: '#07070a', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px', fontSize: '0.8rem' }}
+                        style={{ padding: '0.4rem 0.75rem', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', fontSize: '0.8rem' }}
                       >
                         <option value="ALL">All Flows</option>
                         <option value="ANOMALY_ONLY">Anomalies Only</option>
@@ -708,7 +708,7 @@ export default function App() {
                         <div style={{ overflowX: 'auto', maxHeight: '520px' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                             <thead>
-                              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left', color: 'var(--text-secondary)' }}>
+                              <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left', color: 'var(--text-secondary)' }}>
                                 <th style={{ padding: '0.65rem' }}>#</th>
                                 <th style={{ padding: '0.65rem' }}>IoT Endpoint / IP</th>
                                 <th style={{ padding: '0.65rem' }}>Stage 1 Verdict</th>
@@ -824,19 +824,6 @@ export default function App() {
                   })()}
                 </div>
 
-              </div>
-            ) : (
-              /* Empty State */
-              <div className="glass-panel" style={{ padding: '3.5rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '1.25rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                  <Shield size={40} />
-                </div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Ready to Ingest IoT Device Logs & Captures
-                </h3>
-                <p style={{ maxWidth: '520px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  Upload any Wireshark packet capture (<strong>.pcap</strong> / <strong>.pcapng</strong>) or device log export (<strong>.csv</strong> / <strong>.json</strong>) in the dropzone above to run 2-Stage AI Anomaly Detection, calculate risk scores, and isolate compromised IoT endpoints.
-                </p>
               </div>
             )}
 

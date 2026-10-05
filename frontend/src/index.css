@@ -65,6 +65,18 @@
   box-sizing: border-box;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+}
+
+p, span {
+  color: inherit;
+}
+
+strong, b {
+  color: var(--text-primary);
+}
+
 body {
   background-color: var(--bg-primary);
   background-image: 
@@ -86,6 +98,7 @@ body {
     radial-gradient(ellipse at 50% 0%, rgba(224, 231, 255, 0.6) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 90%, rgba(241, 245, 249, 0.9) 0%, transparent 50%),
     radial-gradient(ellipse at 20% 50%, rgba(226, 232, 240, 0.7) 0%, transparent 70%);
+  color: #0f172a;
 }
 
 /* Custom Shadow Scrollbars */

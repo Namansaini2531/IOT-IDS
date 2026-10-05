@@ -332,97 +332,178 @@ export default function App() {
         {activeTab === 'analyzer' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             
-            {/* File Ingestion & Configuration Hero */}
-            <div className="glass-panel" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <FileSpreadsheet size={19} color="#38bdf8" />
-                    IoT File Ingestion & Device Anomaly Engine
-                  </h2>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                    Upload raw Wireshark captures (<strong>.pcap</strong>, <strong>.pcapng</strong>, <strong>.cap</strong>) or IoT device log datasets (<strong>.csv</strong>, <strong>.json</strong>).
-                  </p>
+            {/* 1. Hero Section (When No File Analyzed Yet) */}
+            {!fileAnalysisResult ? (
+              <div className="hero-wrapper">
+                {/* Top Badge */}
+                <div className="hero-badge">
+                  <Zap size={14} />
+                  <span>Next-Generation Neural IoT Intrusion Detection</span>
                 </div>
 
-                {fileAnalysisResult && (
+                {/* Main Headline */}
+                <h1 className="hero-title">
+                  Real-Time AI Gatekeeper & <br />
+                  <span className="hero-gradient-text">IoT Fleet Threat Intelligence</span>
+                </h1>
+
+                {/* Subtitle */}
+                <p className="hero-subtitle">
+                  Deploy unsupervised Autoencoder anomaly triage coupled with multi-class attack attribution. Ingest live Wireshark captures (<strong>.pcap</strong>) or telemetry datasets to pinpoint rogue IoT endpoints with sub-millisecond precision.
+                </p>
+
+                {/* Capabilities Tag Strip */}
+                <div className="hero-features-strip">
+                  <div className="hero-feature-tag">
+                    <ShieldCheck size={14} color="#10b981" />
+                    <span>99.4% Gatekeeper Accuracy</span>
+                  </div>
+                  <div className="hero-feature-tag">
+                    <Cpu size={14} color="#38bdf8" />
+                    <span>2-Stage Deep Autoencoder</span>
+                  </div>
+                  <div className="hero-feature-tag">
+                    <Radio size={14} color="#a855f7" />
+                    <span>Zero-Day Anomaly Triage</span>
+                  </div>
+                  <div className="hero-feature-tag">
+                    <Layers size={14} color="#f59e0b" />
+                    <span>Deep Packet Scan</span>
+                  </div>
+                </div>
+
+                {/* Main Hero Ingestion Card */}
+                <div className="glass-panel" style={{ width: '100%', marginTop: '1rem', padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'left' }}>
+                  {/* Dropzone Area */}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="dropzone-container"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        setSelectedFile(e.dataTransfer.files[0]);
+                      }
+                    }}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pcap,.pcapng,.cap,.csv,.json,.log"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setSelectedFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '1rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.25)', boxShadow: '0 4px 16px rgba(56, 189, 248, 0.2)' }}>
+                      <UploadCloud size={32} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {selectedFile ? `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "Drag and drop network captures or device logs here"}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                        Supports <strong>.pcap</strong>, <strong>.pcapng</strong>, <strong>.cap</strong>, <strong>Zeek logs</strong>, and <strong>CSV / JSON datasets</strong>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      style={{
+                        marginTop: '0.25rem',
+                        padding: '0.45rem 1rem',
+                        borderRadius: '7px',
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: 'var(--shadow-black-sm)'
+                      }}
+                    >
+                      Browse Local Files
+                    </button>
+                  </div>
+
+                  {/* Ingestion Controls */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <Layers size={14} color="#38bdf8" />
+                      <span>Scan Mode: <strong>Full Dataset Deep Scan (Uncapped)</strong></span>
+                    </div>
+
+                    <button
+                      onClick={handleUploadAndAnalyze}
+                      disabled={!selectedFile || isAnalyzingFile}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.6rem', borderRadius: '8px', border: selectedFile ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid var(--border-color)',
+                        background: selectedFile ? (theme === 'dark' ? 'linear-gradient(135deg, #1c1e28, #101117)' : 'linear-gradient(135deg, #0284c7, #0369a1)') : 'var(--border-subtle)',
+                        color: selectedFile ? '#ffffff' : 'var(--text-muted)',
+                        fontWeight: 700, fontSize: '0.9rem', cursor: selectedFile ? 'pointer' : 'not-allowed',
+                        boxShadow: selectedFile ? '0 8px 24px rgba(56, 189, 248, 0.25)' : 'none'
+                      }}
+                    >
+                      {isAnalyzingFile ? <RefreshCw className="pulse-active" size={16} /> : <Search size={16} color={selectedFile && theme === 'light' ? '#ffffff' : '#38bdf8'} />}
+                      {isAnalyzingFile ? "Analyzing Traffic with AI..." : "Run IoT Anomaly Audit"}
+                    </button>
+                  </div>
+
+                  {uploadToast && (
+                    <div style={{ padding: '0.75rem 1rem', borderRadius: '7px', background: uploadToast.startsWith('Error') || uploadToast.startsWith('Connection') ? 'rgba(244, 63, 94, 0.1)' : 'rgba(16, 185, 129, 0.1)', border: `1px solid ${uploadToast.startsWith('Error') || uploadToast.startsWith('Connection') ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`, color: uploadToast.startsWith('Error') || uploadToast.startsWith('Connection') ? '#fb7185' : '#10b981', fontSize: '0.82rem', fontWeight: 600 }}>
+                      {uploadToast}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Compact Ingestion Bar (When Results Active) */
+              <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '0.65rem', borderRadius: '10px', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {fileAnalysisResult.filename || 'Analyzed Dataset'}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                      Scanned <strong>{fileAnalysisResult.total_records_analyzed.toLocaleString()}</strong> flows across <strong>{fileAnalysisResult.total_devices_scanned || 1}</strong> IoT nodes
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                   <button
-                    onClick={handleDownloadReport}
+                    onClick={() => {
+                      setFileAnalysisResult(null);
+                      setSelectedFile(null);
+                    }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', borderRadius: '7px', border: '1px solid var(--border-color)',
+                      display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.95rem', borderRadius: '7px', border: '1px solid var(--border-color)',
                       background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: 'var(--shadow-black-sm)'
                     }}
                   >
-                    <Download size={14} color="#38bdf8" /> Export Audit JSON
+                    <RefreshCw size={13} /> Upload Another File
                   </button>
-                )}
-              </div>
 
-              {/* Dropzone Area */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="dropzone-container"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    setSelectedFile(e.dataTransfer.files[0]);
-                  }
-                }}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pcap,.pcapng,.cap,.csv,.json,.log"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setSelectedFile(e.target.files[0]);
-                    }
-                  }}
-                />
-                <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '0.85rem', borderRadius: '50%', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
-                  <UploadCloud size={28} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {selectedFile ? `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "Select or drag & drop Wireshark / IoT Log file"}
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                    Accepts <strong>.pcap</strong>, <strong>.pcapng</strong>, <strong>.cap</strong>, <strong>Zeek logs</strong>, and <strong>CSV/JSON datasets</strong>
-                  </div>
+                  <button
+                    onClick={handleDownloadReport}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.95rem', borderRadius: '7px', border: '1px solid rgba(56, 189, 248, 0.35)',
+                      background: theme === 'dark' ? 'linear-gradient(135deg, #191b24, #0e0f14)' : '#f0f9ff', color: theme === 'dark' ? '#38bdf8' : '#0284c7', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: 'var(--shadow-black-sm)'
+                    }}
+                  >
+                    <Download size={13} /> Export JSON Report
+                  </button>
                 </div>
               </div>
-
-              {/* Ingestion Controls */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  <Layers size={14} color="#38bdf8" />
-                  <span>Mode: <strong>Full Dataset Deep Scan</strong></span>
-                </div>
-
-                <button
-                  onClick={handleUploadAndAnalyze}
-                  disabled={!selectedFile || isAnalyzingFile}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.4rem', borderRadius: '8px', border: selectedFile ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid var(--border-color)',
-                    background: selectedFile ? (theme === 'dark' ? 'linear-gradient(135deg, #1c1e28, #101117)' : 'linear-gradient(135deg, #0284c7, #0369a1)') : 'var(--border-subtle)',
-                    color: selectedFile ? '#ffffff' : 'var(--text-muted)',
-                    fontWeight: 700, fontSize: '0.88rem', cursor: selectedFile ? 'pointer' : 'not-allowed',
-                    boxShadow: selectedFile ? '0 8px 20px rgba(0, 0, 0, 0.3)' : 'none'
-                  }}
-                >
-                  {isAnalyzingFile ? <RefreshCw className="pulse-active" size={15} /> : <Search size={15} color={selectedFile && theme === 'light' ? '#ffffff' : '#38bdf8'} />}
-                  {isAnalyzingFile ? "Analyzing Traffic with AI..." : "Run IoT Anomaly Audit"}
-                </button>
-              </div>
-
-              {uploadToast && (
-                <div style={{ padding: '0.65rem 0.9rem', borderRadius: '7px', background: uploadToast.startsWith('Error') ? 'rgba(244, 63, 94, 0.1)' : 'rgba(16, 185, 129, 0.1)', border: `1px solid ${uploadToast.startsWith('Error') ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`, color: uploadToast.startsWith('Error') ? '#fb7185' : '#10b981', fontSize: '0.82rem', fontWeight: 600 }}>
-                  {uploadToast}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Audit Results Section */}
             {fileAnalysisResult && (

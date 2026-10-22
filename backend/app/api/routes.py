@@ -523,7 +523,7 @@ class CyberChatRequest(BaseModel):
     messages: List[ChatMessage]
     context: Optional[Dict[str, Any]] = None
     groq_api_key: Optional[str] = None
-    model: Optional[str] = "llama-3.3-70b-versatile"
+    model: Optional[str] = None
 
 @router.post("/chat/remediate")
 async def chat_remediation_advisor(request: CyberChatRequest):

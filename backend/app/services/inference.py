@@ -11,13 +11,6 @@ from ml.explainability import extract_top_deviations
 from backend.app.core.risk_engine import DeviceRiskEngine
 
 class TwoStageInferencePipeline:
-    """
-    Production-grade inference pipeline combining:
-    1. Unsupervised Autoencoder Anomaly Gatekeeper
-    2. Supervised Attack Attribution Classifier
-    3. Explainability Deviations Engine
-    4. Auditable Device Risk Engine
-    """
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scaler = None

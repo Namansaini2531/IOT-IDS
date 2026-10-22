@@ -121,16 +121,61 @@ export default function AICyberAdvisor({
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  // Lightweight Markdown renderer with code block copy support
+  // Lightweight Markdown renderer with code block copy and table support
   const renderFormattedContent = (content, msgIdx) => {
-    const lines = content.split('\n');
+    const rawLines = content.split('\n');
     const elements = [];
     let inCodeBlock = false;
     let codeBlockLang = '';
     let codeBlockContent = [];
+    let tableBuffer = [];
 
-    lines.forEach((line, i) => {
+    const flushTable = (tIdx) => {
+      if (tableBuffer.length === 0) return;
+      const parseCells = (row) =>
+        row
+          .trim()
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((c) => c.trim());
+
+      const headerLine = tableBuffer[0];
+      const hasSeparator = tableBuffer.length > 1 && /^\|?(\s*:?-+:?\s*\|?)+$/.test(tableBuffer[1].trim());
+      const dataLines = hasSeparator ? tableBuffer.slice(2) : tableBuffer.slice(1);
+      const headers = parseCells(headerLine);
+
+      elements.push(
+        <div key={`${msgIdx}-table-${tIdx}`} className="ai-table-wrapper">
+          <table className="ai-md-table">
+            <thead>
+              <tr>
+                {headers.map((h, hi) => (
+                  <th key={hi}>{formatInlineText(h)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataLines.map((row, ri) => {
+                const cells = parseCells(row);
+                return (
+                  <tr key={ri}>
+                    {cells.map((cell, ci) => (
+                      <td key={ci}>{formatInlineText(cell)}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+      tableBuffer = [];
+    };
+
+    rawLines.forEach((line, i) => {
       if (line.startsWith('```')) {
+        flushTable(i);
         if (!inCodeBlock) {
           inCodeBlock = true;
           codeBlockLang = line.replace('```', '').trim() || 'bash';
@@ -167,18 +212,30 @@ export default function AICyberAdvisor({
         return;
       }
 
-      if (line.startsWith('### ')) {
-        elements.push(<h3 key={i} className="ai-md-h3">{line.replace('### ', '')}</h3>);
+      const trimmed = line.trim();
+      if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 2) {
+        tableBuffer.push(trimmed);
+        return;
+      } else if (tableBuffer.length > 0) {
+        flushTable(i);
+      }
+
+      if (line.startsWith('# ')) {
+        elements.push(<h2 key={i} className="ai-md-h2">{formatInlineText(line.replace('# ', ''))}</h2>);
+      } else if (line.startsWith('## ')) {
+        elements.push(<h3 key={i} className="ai-md-h3">{formatInlineText(line.replace('## ', ''))}</h3>);
+      } else if (line.startsWith('### ')) {
+        elements.push(<h3 key={i} className="ai-md-h3">{formatInlineText(line.replace('### ', ''))}</h3>);
       } else if (line.startsWith('#### ')) {
-        elements.push(<h4 key={i} className="ai-md-h4">{line.replace('#### ', '')}</h4>);
+        elements.push(<h4 key={i} className="ai-md-h4">{formatInlineText(line.replace('#### ', ''))}</h4>);
       } else if (line.startsWith('> ')) {
-        elements.push(<blockquote key={i} className="ai-md-quote">{line.replace('> ', '')}</blockquote>);
+        elements.push(<blockquote key={i} className="ai-md-quote">{formatInlineText(line.replace('> ', ''))}</blockquote>);
       } else if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
         const checked = line.startsWith('- [x] ');
         elements.push(
           <div key={i} className="ai-md-checklist-item">
             <input type="checkbox" readOnly checked={checked} />
-            <span>{line.replace(/- \[[ x]\] /, '')}</span>
+            <span>{formatInlineText(line.replace(/- \[[ x]\] /, ''))}</span>
           </div>
         );
       } else if (line.startsWith('- ') || line.startsWith('* ')) {
@@ -188,9 +245,16 @@ export default function AICyberAdvisor({
             {formatInlineText(text)}
           </li>
         );
-      } else if (line.trim() === '---') {
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        const text = trimmed.replace(/^\d+\.\s/, '');
+        elements.push(
+          <li key={i} className="ai-md-li numbered">
+            {formatInlineText(text)}
+          </li>
+        );
+      } else if (trimmed === '---') {
         elements.push(<hr key={i} className="ai-md-hr" />);
-      } else if (line.trim().length > 0) {
+      } else if (trimmed.length > 0) {
         elements.push(
           <p key={i} className="ai-md-p">
             {formatInlineText(line)}
@@ -199,12 +263,18 @@ export default function AICyberAdvisor({
       }
     });
 
+    flushTable(rawLines.length);
     return elements;
   };
 
   const formatInlineText = (text) => {
-    const parts = text.split(/(\*\*.*?\*\*|`.*?`|\*.*?\*)/g);
+    if (!text) return '';
+    const parts = text.split(/(\*\*.*?\*\*|`.*?`|\*.*?\*|<br\s*\/?>)/gi);
     return parts.map((part, idx) => {
+      if (!part) return null;
+      if (part.toLowerCase().match(/^<br\s*\/?>$/)) {
+        return <br key={idx} />;
+      }
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={idx}>{part.slice(2, -2)}</strong>;
       }

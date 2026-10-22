@@ -35,6 +35,7 @@ INSTRUCTION STYLE & DETAILED FORMAT (FOR FIELD TECHNICIANS):
      * **Step 4 - Verification (How to check if it worked):** Simple command or check (e.g. `iptables -L -n -v` or ping check) so the technician knows the issue is resolved.
    - **3. Technician Pro-Tip:** A practical preventive tip (e.g., scheduled firmware check, Zero-Trust VLAN, turning off remote web management).
 3. TONE: Clear, helpful, structured, and easy for any operator or technician to execute without getting lost in abstract theory.
+4. FORMATTING RULE (NO RAW HTML OR <br> TAGS): Do NOT use raw HTML tags like `<br>`, `<br/>`, or `<div>`. Never compress multiple instructions into table cells with `<br>`. Format all procedures as clean, numbered lists (`1. `, `2. `) and clear markdown headings.
 """
 
 def generate_local_rule_based_advice(context: Dict[str, Any], user_query: str) -> str:

@@ -893,6 +893,62 @@ body {
   line-height: 1.5;
 }
 
+/* Markdown Table Rendering */
+.ai-table-wrapper {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+}
+
+.ai-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  text-align: left;
+}
+
+.ai-md-table th {
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--accent-cyan);
+  padding: 0.55rem 0.75rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.ai-md-table th:last-child {
+  border-right: none;
+}
+
+.ai-md-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  color: var(--text-primary);
+  line-height: 1.45;
+  vertical-align: top;
+}
+
+.ai-md-table td:last-child {
+  border-right: none;
+}
+
+.ai-md-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ai-md-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ai-md-li.numbered {
+  list-style-type: decimal;
+  margin-left: 1.25rem;
+  margin-bottom: 0.35rem;
+}
 
 /* Chat Input Bar */
 .ai-input-container {

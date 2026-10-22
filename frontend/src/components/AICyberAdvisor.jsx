@@ -10,6 +10,7 @@ import {
 
 export default function AICyberAdvisor({
   apiBase,
+  onSwitchApi,
   fileAnalysisResult,
   selectedTarget = null,
   isOpen,
@@ -102,12 +103,22 @@ export default function AICyberAdvisor({
       ]);
     } catch (err) {
       console.error("Chat error:", err);
+      const is404 = err.message.includes("404");
+      const isRender = apiBase.includes("render.com");
+
+      let errorContent = `⚠️ **Advisory Connection Error:** Could not reach the backend endpoint at \`${apiBase}/chat/remediate\`.\n\n*Error details:* ${err.message}`;
+
+      if (is404 && isRender) {
+        errorContent = `⚠️ **AI Chatbot Endpoint Not Deployed on Render Yet (HTTP 404)**\n\nThe deployed cloud instance at \`https://iot-ids.onrender.com\` is running an older container build that does not include the \`/api/v1/chat/remediate\` endpoint.\n\n💡 **Instant Solution:** Switch your active backend to **Localhost (FastAPI)** where this AI endpoint and all models are running live right now!`;
+      }
+
       setMessages(prev => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: `⚠️ **Advisory Connection Error:** Could not reach the backend endpoint at \`${apiBase}/chat/remediate\`.\n\n*Error details:* ${err.message}`
+          content: errorContent,
+          showSwitchLocal: (is404 || err.message.includes("Failed to fetch")) && isRender
         }
       ]);
     } finally {
@@ -365,6 +376,41 @@ export default function AICyberAdvisor({
                 <div className="ai-markdown-body">
                   {renderFormattedContent(msg.content, idx)}
                 </div>
+                {msg.showSwitchLocal && onSwitchApi && (
+                  <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSwitchApi("http://localhost:8000/api/v1");
+                        setMessages(prev => [
+                          ...prev,
+                          {
+                            id: Date.now().toString(),
+                            role: 'assistant',
+                            content: '✅ **Switched to Localhost Backend (`http://localhost:8000/api/v1`)!**\n\nYou are now connected directly to your local FastAPI backend. Ask your question again to receive the full step-by-step guidance.'
+                          }
+                        ]);
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        padding: '0.5rem 0.95rem',
+                        borderRadius: '7px',
+                        background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                        color: '#ffffff',
+                        border: 'none',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                      }}
+                    >
+                      <RefreshCw size={12} />
+                      Switch to Localhost (http://localhost:8000)
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}

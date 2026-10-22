@@ -1064,6 +1064,7 @@ export default function App() {
       {/* AI Cyber Defense Advisor Drawer / Modal */}
       <AICyberAdvisor
         apiBase={apiBase}
+        onSwitchApi={handleSwitchApi}
         fileAnalysisResult={fileAnalysisResult}
         selectedTarget={aiAdvisorTarget}
         isOpen={showAiAdvisor}

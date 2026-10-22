@@ -14,5 +14,9 @@ class Settings(BaseSettings):
     # Simulation defaults
     REPLAY_INTERVAL_SECONDS: float = 0.8
     DEFAULT_BATCH_SIZE: int = 1
+    
+    # Groq AI Cyber Advisor settings
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 settings = Settings()

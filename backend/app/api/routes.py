@@ -514,3 +514,36 @@ async def load_custom_dataset_into_stream(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stream file '{file.filename}': {str(e)}")
+
+class ChatMessage(BaseModel):
+    role: str = "user"
+    content: str
+
+class CyberChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    context: Optional[Dict[str, Any]] = None
+    groq_api_key: Optional[str] = None
+    model: Optional[str] = "llama-3.3-70b-versatile"
+
+@router.post("/chat/remediate")
+async def chat_remediation_advisor(request: CyberChatRequest):
+    """
+    AI-powered Cyber Defense & Incident Response Chatbot:
+    Synthesizes ML anomaly telemetry, attack classification, and feature deviations
+    to deliver instant, actionable containment playbooks, firewall commands, and forensic advice via Groq LPU.
+    """
+    from backend.app.services.groq_service import query_groq_advisor
+    from backend.app.core.config import settings
+
+    messages_payload = [{"role": m.role, "content": m.content} for m in request.messages]
+    context_payload = request.context or {}
+    api_key = request.groq_api_key or settings.GROQ_API_KEY
+    model = request.model or settings.GROQ_MODEL
+
+    result = await query_groq_advisor(
+        messages=messages_payload,
+        context=context_payload,
+        api_key=api_key,
+        model=model
+    )
+    return result

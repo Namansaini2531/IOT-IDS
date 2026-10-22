@@ -7,7 +7,6 @@ import {
   Server,
   Radio,
   Cpu,
-  Zap,
   Play,
   Pause,
   RefreshCw,
@@ -38,8 +37,11 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Sun,
-  Moon
+  Moon,
+  Bot,
+  Sparkles
 } from 'lucide-react';
+import AICyberAdvisor from './components/AICyberAdvisor';
 import {
   LineChart,
   Line,
@@ -97,6 +99,14 @@ export default function App() {
   const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('ALL');
   const [tablePage, setTablePage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [showAiAdvisor, setShowAiAdvisor] = useState(false);
+  const [aiAdvisorTarget, setAiAdvisorTarget] = useState(null);
+
+  const openAiAdvisor = (target = null) => {
+    setAiAdvisorTarget(target);
+    setShowAiAdvisor(true);
+  };
+
   const [theme, setTheme] = useState(() => localStorage.getItem('cortexio_theme') || 'dark');
 
   useEffect(() => {
@@ -298,6 +308,22 @@ export default function App() {
             </button>
           </div>
 
+          <button
+            onClick={() => openAiAdvisor()}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.45rem 0.85rem', borderRadius: '7px',
+              border: '1px solid rgba(56, 189, 248, 0.45)',
+              background: theme === 'dark' ? 'rgba(56, 189, 248, 0.1)' : '#e0f2fe',
+              color: theme === 'dark' ? '#38bdf8' : '#0284c7',
+              fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer',
+              boxShadow: '0 0 12px rgba(56, 189, 248, 0.2)'
+            }}
+            title="Open AI Cyber Defense Advisor"
+          >
+            <Bot size={14} color="#38bdf8" />
+            <span>Ask AI Advisor</span>
+          </button>
+
           {fileAnalysisResult ? (
             <button
               onClick={handleDownloadReport}
@@ -335,11 +361,6 @@ export default function App() {
             {/* 1. Hero Section (When No File Analyzed Yet) */}
             {!fileAnalysisResult ? (
               <div className="hero-wrapper">
-                {/* Top Badge */}
-                <div className="hero-badge">
-                  <Zap size={14} />
-                  <span>Next-Generation Neural IoT Intrusion Detection</span>
-                </div>
 
                 {/* Main Headline */}
                 <h1 className="hero-title">
@@ -349,7 +370,7 @@ export default function App() {
 
                 {/* Subtitle */}
                 <p className="hero-subtitle">
-                  Deploy unsupervised Autoencoder anomaly triage coupled with multi-class attack attribution. Ingest live Wireshark captures (<strong>.pcap</strong>) or telemetry datasets to pinpoint rogue IoT endpoints with sub-millisecond precision.
+                  Upload network captures or device logs to detect anomalies and classify cyber threats in real time.
                 </p>
 
                 {/* Capabilities Tag Strip */}
@@ -490,6 +511,18 @@ export default function App() {
                     }}
                   >
                     <RefreshCw size={13} /> Upload Another File
+                  </button>
+
+                  <button
+                    onClick={() => openAiAdvisor()}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.5rem 1.05rem', borderRadius: '7px',
+                      border: '1px solid rgba(56, 189, 248, 0.5)',
+                      background: 'linear-gradient(135deg, #0284c7, #2563eb)', color: '#ffffff',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)'
+                    }}
+                  >
+                    <Sparkles size={14} /> AI Incident Playbook
                   </button>
 
                   <button
@@ -797,6 +830,7 @@ export default function App() {
                                 <th style={{ padding: '0.65rem' }}>Recon MSE</th>
                                 <th style={{ padding: '0.65rem' }}>Risk Score</th>
                                 <th style={{ padding: '0.65rem' }}>Root Cause Signal Deviation</th>
+                                <th style={{ padding: '0.65rem', textAlign: 'center' }}>AI Advisor</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -824,11 +858,34 @@ export default function App() {
                                     <td style={{ padding: '0.65rem', color: 'var(--text-secondary)' }}>
                                       {row.top_deviation ? `${row.top_deviation.label} (${row.top_deviation.observed_value})` : 'Normal Baseline'}
                                     </td>
+                                    <td style={{ padding: '0.65rem', textAlign: 'center' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => openAiAdvisor(row)}
+                                        style={{
+                                          padding: '0.25rem 0.6rem',
+                                          borderRadius: '6px',
+                                          background: row.is_anomaly ? 'rgba(56, 189, 248, 0.12)' : 'var(--bg-elevated)',
+                                          border: row.is_anomaly ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid var(--border-color)',
+                                          color: row.is_anomaly ? '#38bdf8' : 'var(--text-secondary)',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.3rem'
+                                        }}
+                                        title={`Get AI Remediation for flow #${row.row_index}`}
+                                      >
+                                        <Bot size={12} color="#38bdf8" />
+                                        <span>Triage</span>
+                                      </button>
+                                    </td>
                                   </tr>
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                  <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                                     No network flow records match the selected search/filter.
                                   </td>
                                 </tr>
@@ -915,6 +972,32 @@ export default function App() {
 
       </main>
 
+      {/* Floating Action Button to Launch AI Advisor */}
+      <button
+        type="button"
+        onClick={() => openAiAdvisor()}
+        className="ai-fab-launcher"
+        title="Open CortexIO AI Cyber Defense Advisor"
+      >
+        <Bot size={18} color="#38bdf8" />
+        <span>AI Cyber Advisor</span>
+        {fileAnalysisResult?.anomalies_detected > 0 && (
+          <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.45rem', borderRadius: '999px', background: '#f43f5e', color: '#fff', fontWeight: 800 }}>
+            {fileAnalysisResult.anomalies_detected}
+          </span>
+        )}
+      </button>
+
+      {/* AI Cyber Defense Advisor Drawer / Modal */}
+      <AICyberAdvisor
+        apiBase={apiBase}
+        fileAnalysisResult={fileAnalysisResult}
+        selectedTarget={aiAdvisorTarget}
+        isOpen={showAiAdvisor}
+        onClose={() => setShowAiAdvisor(false)}
+      />
+
     </div>
   );
 }
+

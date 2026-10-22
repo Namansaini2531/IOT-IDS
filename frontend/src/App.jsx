@@ -39,7 +39,8 @@ import {
   Sun,
   Moon,
   Bot,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 import AICyberAdvisor from './components/AICyberAdvisor';
 import {
@@ -87,6 +88,8 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [systemStatus, setSystemStatus] = useState(null);
   const [backendConnected, setBackendConnected] = useState(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
+  const [backendLatency, setBackendLatency] = useState(null);
   const [evalReport, setEvalReport] = useState(null);
 
   // File Upload & Dataset Analyzer State
@@ -137,18 +140,25 @@ export default function App() {
 
   // Check Backend Connectivity & Fetch System Status
   const checkBackendHealth = (targetUrl = apiBase) => {
+    setIsCheckingBackend(true);
+    const startT = performance.now();
     fetch(`${targetUrl}/status`)
       .then(res => {
-        if (!res.ok) throw new Error("Status failed");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then(data => {
+        const lat = Math.round(performance.now() - startT);
+        setBackendLatency(lat);
         setSystemStatus(data);
         setBackendConnected(true);
+        setIsCheckingBackend(false);
       })
       .catch(err => {
         console.error("Backend status check error:", err);
         setBackendConnected(false);
+        setIsCheckingBackend(false);
+        setBackendLatency(null);
       });
 
     fetch(`${targetUrl}/evaluation-report`)
@@ -173,6 +183,27 @@ export default function App() {
     setShowSettingsModal(false);
     checkBackendHealth(cleaned);
     setUploadToast(`Backend URL updated to ${cleaned}`);
+  };
+
+  const handleSwitchApi = (targetUrl) => {
+    let cleaned = targetUrl.trim().replace(/\/$/, "");
+    if (!cleaned.endsWith("/api/v1") && !cleaned.endsWith("/api")) {
+      cleaned = `${cleaned}/api/v1`;
+    }
+    setApiBase(cleaned);
+    setCustomApiInput(cleaned);
+    localStorage.setItem("iot_ids_api_base", cleaned);
+    checkBackendHealth(cleaned);
+  };
+
+  const handleResetApi = () => {
+    localStorage.removeItem("iot_ids_api_base");
+    const defaultUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? "http://localhost:8000/api/v1"
+      : "https://iot-ids.onrender.com/api/v1";
+    setApiBase(defaultUrl);
+    setCustomApiInput(defaultUrl);
+    checkBackendHealth(defaultUrl);
   };
 
   // Upload File & Analyze with 2-Stage AI Model
@@ -278,6 +309,48 @@ export default function App() {
 
         {/* Right: Quick Action & Theme Switching Pill */}
         <div className="nav-actions-group">
+          {/* Backend Connection Status Badge */}
+          <button
+            type="button"
+            onClick={() => setShowSettingsModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.42rem 0.85rem',
+              borderRadius: '999px',
+              border: `1px solid ${backendConnected ? 'rgba(16, 185, 129, 0.4)' : isCheckingBackend ? 'rgba(245, 158, 11, 0.4)' : 'rgba(244, 63, 94, 0.4)'}`,
+              background: backendConnected ? (theme === 'dark' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.12)') : isCheckingBackend ? 'rgba(245, 158, 11, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+              color: backendConnected ? '#10b981' : isCheckingBackend ? '#f59e0b' : '#fb7185',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: 'var(--shadow-black-sm)'
+            }}
+            title={`Active API: ${apiBase} (Click to configure or switch)`}
+          >
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: backendConnected ? '#10b981' : isCheckingBackend ? '#f59e0b' : '#f43f5e',
+                boxShadow: `0 0 6px ${backendConnected ? '#10b981' : isCheckingBackend ? '#f59e0b' : '#f43f5e'}`
+              }}
+            />
+            <span>
+              {isCheckingBackend
+                ? 'Connecting...'
+                : backendConnected
+                ? apiBase.includes('render.com')
+                  ? 'Render Cloud'
+                  : 'Local (8000)'
+                : 'API Offline'}
+            </span>
+            <SettingsIcon size={12} style={{ opacity: 0.8 }} />
+          </button>
+
           {/* Interactive Dual-Mode Switching Button */}
           <div 
             className="theme-switcher-pill"
@@ -996,6 +1069,352 @@ export default function App() {
         isOpen={showAiAdvisor}
         onClose={() => setShowAiAdvisor(false)}
       />
+
+      {/* Backend API Settings Modal */}
+      {showSettingsModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem'
+          }}
+          onClick={() => setShowSettingsModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '560px',
+              backgroundColor: theme === 'dark' ? '#11131a' : '#ffffff',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.6)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '1.25rem 1.5rem',
+                borderBottom: '1px solid var(--border-color)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: theme === 'dark' ? 'linear-gradient(180deg, #161822 0%, #11131a 100%)' : '#f8fafc'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{ padding: '0.45rem', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8' }}>
+                  <Server size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                    Backend API Connection
+                  </h3>
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    Configure the IoT-IDS detection engine host
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '0.35rem',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              
+              {/* Current Status Card */}
+              <div
+                style={{
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  background: backendConnected
+                    ? (theme === 'dark' ? 'rgba(16, 185, 129, 0.08)' : '#f0fdf4')
+                    : isCheckingBackend
+                    ? (theme === 'dark' ? 'rgba(245, 158, 11, 0.08)' : '#fffbeb')
+                    : (theme === 'dark' ? 'rgba(244, 63, 94, 0.08)' : '#fff1f2'),
+                  border: `1px solid ${
+                    backendConnected
+                      ? 'rgba(16, 185, 129, 0.3)'
+                      : isCheckingBackend
+                      ? 'rgba(245, 158, 11, 0.3)'
+                      : 'rgba(244, 63, 94, 0.3)'
+                  }`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: backendConnected ? '#10b981' : isCheckingBackend ? '#f59e0b' : '#f43f5e',
+                      boxShadow: `0 0 8px ${backendConnected ? '#10b981' : isCheckingBackend ? '#f59e0b' : '#f43f5e'}`
+                    }}
+                  />
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {isCheckingBackend
+                        ? 'Testing Connection...'
+                        : backendConnected
+                        ? 'Connected & Operational'
+                        : 'Backend Unreachable'}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                      {apiBase}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  {backendLatency !== null && (
+                    <span style={{ fontSize: '0.72rem', color: backendLatency < 300 ? '#10b981' : '#f59e0b', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                      {backendLatency} ms
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => checkBackendHealth(apiBase)}
+                    disabled={isCheckingBackend}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '6px',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <RefreshCw size={11} className={isCheckingBackend ? 'pulse-active' : ''} />
+                    Retest
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Preset Selection */}
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: '0.5rem' }}>
+                  Quick Target Presets:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  
+                  {/* Preset 1: Local */}
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchApi("http://localhost:8000/api/v1")}
+                    style={{
+                      padding: '0.85rem',
+                      borderRadius: '10px',
+                      textAlign: 'left',
+                      background: apiBase === "http://localhost:8000/api/v1"
+                        ? (theme === 'dark' ? 'rgba(56, 189, 248, 0.12)' : '#e0f2fe')
+                        : 'var(--bg-elevated)',
+                      border: apiBase === "http://localhost:8000/api/v1"
+                        ? '1.5px solid #38bdf8'
+                        : '1px solid var(--border-color)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Localhost (FastAPI)
+                      </span>
+                      {apiBase === "http://localhost:8000/api/v1" && (
+                        <CheckCircle2 size={14} color="#38bdf8" />
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                      http://localhost:8000/api/v1
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#10b981', marginTop: '0.35rem', fontWeight: 600 }}>
+                      ⚡ Ultra-fast (&lt;10ms)
+                    </div>
+                  </button>
+
+                  {/* Preset 2: Render Cloud */}
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchApi("https://iot-ids.onrender.com/api/v1")}
+                    style={{
+                      padding: '0.85rem',
+                      borderRadius: '10px',
+                      textAlign: 'left',
+                      background: apiBase === "https://iot-ids.onrender.com/api/v1"
+                        ? (theme === 'dark' ? 'rgba(56, 189, 248, 0.12)' : '#e0f2fe')
+                        : 'var(--bg-elevated)',
+                      border: apiBase === "https://iot-ids.onrender.com/api/v1"
+                        ? '1.5px solid #38bdf8'
+                        : '1px solid var(--border-color)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Render Cloud (Live)
+                      </span>
+                      {apiBase === "https://iot-ids.onrender.com/api/v1" && (
+                        <CheckCircle2 size={14} color="#38bdf8" />
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                      https://iot-ids.onrender.com/api/v1
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#38bdf8', marginTop: '0.35rem', fontWeight: 600 }}>
+                      ☁️ Public Live API
+                    </div>
+                  </button>
+
+                </div>
+              </div>
+
+              {/* Custom URL Input */}
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: '0.4rem' }}>
+                  Custom Backend Base URL:
+                </label>
+                <form
+                  onSubmit={handleSaveApiUrl}
+                  style={{ display: 'flex', gap: '0.5rem' }}
+                >
+                  <input
+                    type="text"
+                    value={customApiInput}
+                    onChange={(e) => setCustomApiInput(e.target.value)}
+                    placeholder="https://example.com/api/v1"
+                    style={{
+                      flex: 1,
+                      padding: '0.55rem 0.85rem',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.82rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!customApiInput.trim() || isCheckingBackend}
+                    style={{
+                      padding: '0.55rem 1rem',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Apply & Connect
+                  </button>
+                </form>
+              </div>
+
+              {/* Notice regarding Render Free-Tier Sleep */}
+              <div
+                style={{
+                  padding: '0.75rem 0.95rem',
+                  borderRadius: '8px',
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  fontSize: '0.74rem',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.55rem'
+                }}
+              >
+                <Info size={15} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ color: '#f59e0b' }}>Render Cold Start Note:</strong>
+                  {" "}Free instances on Render sleep after 15 minutes of inactivity. When waking up, the first request takes approximately <strong>45–60 seconds</strong> to spin up.
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: '0.9rem 1.5rem',
+                borderTop: '1px solid var(--border-color)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: theme === 'dark' ? '#0d0e14' : '#f8fafc'
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleResetApi}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.74rem',
+                  textDecoration: 'underline',
+                  cursor: 'pointer'
+                }}
+              >
+                Reset to automatic default
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(false)}
+                style={{
+                  padding: '0.45rem 1.1rem',
+                  borderRadius: '7px',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
